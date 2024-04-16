@@ -63,7 +63,14 @@ the buffers in which the timer should do anything.")
 
 ;; (setq preview-leave-open-previews-visible t)
 
-(defcustom preview-auto-)
+(defcustom preview-auto-rules-function nil
+  "Function to generate rules for identifying math environments.
+If non-nil, `preview-auto--generate-rules' delegates to this function.
+The function should return a list of rules for identifying math
+environments, as described in the documentation of
+`preview-auto--generate-rules'."
+  :type '(choice (const :tag "Default" nil) function)
+  :group 'preview-auto)
 
 (defun preview-auto--generate-rules ()
   "Return list of rules for identifying math environments.
@@ -71,18 +78,20 @@ Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
 BEGIN and END are the delimiters and PREDICATE is a function, called
 just beyond the BEGIN delimiter, that returns non-nil if the environment
 is valid."
-  (let* ((basic-rules
-          (mapcar (lambda (pair)
-                    (cons (car pair)
-                          (cons (cdr pair) '(texmathp))))
-                  '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
-         (env-rules
-          (mapcar (lambda (env)
-                    (cons (format "\\begin{%s}" env)
-                          (cons (format "\\end{%s}" env) t)))
-                  texmathp-environments))
-         (rules (append basic-rules env-rules)))
-    rules))
+  (if preview-auto-rules-function
+      (funcall preview-auto-rules-function)
+    (let* ((basic-rules
+            (mapcar (lambda (pair)
+                      (cons (car pair)
+                            (cons (cdr pair) '(texmathp))))
+                    '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
+           (env-rules
+            (mapcar (lambda (env)
+                      (cons (format "\\begin{%s}" env)
+                            (cons (format "\\end{%s}" env) t)))
+                    texmathp-environments))
+           (rules (append basic-rules env-rules)))
+      rules)))
 
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
@@ -130,7 +139,7 @@ customizable predicate `preview-auto-predicate' holds."
                  (end (preview-auto--search (regexp-quote end-string) limit))
                  (inner-end (- end (length end-string)))
                  (validity
-                  (and (string-match-p "[^[:space:]\n\r"
+                  (and (string-match-p "[^[:space:]\n\r]"
                                        (buffer-substring-no-properties
                                         inner-begin inner-end))
                        (not (preview-auto--already-previewed-at begin))
@@ -247,24 +256,31 @@ region that contains this group."
          (< begin-document (point) end-document)
          (when (texmathp)
            (let ((why (car texmathp-why))
-                 (beg (cdr texmathp-why)))
-             (unless (member why '("$" "$$" "\\(" "\\["))
-               (setq why (format "\\begin{%s}" why)))
-             (unless (preview-auto--already-previewed-at beg)
+                 (begin (cdr texmathp-why)))
+             (when (and (not (preview-auto--already-previewed-at begin))
+                        (or (null preview-auto-predicate)
+                            (funcall preview-auto-predicate)))
+               (unless (member why '("$" "$$" "\\(" "\\["))
+                 (setq why (format "\\begin{%s}" why)))
                (let ((limit (save-excursion
-                              (goto-char beg)
+                              (goto-char begin)
                               (preview-auto--truncated-bound (point-max)))))
                  (when (> limit (point))
                    (when-let*
                        ((end-string (cadr (assoc why rules)))
                         (end (save-excursion
                                (preview-auto--search (regexp-quote end-string) limit))))
-                     ;; Avoid error-prone updates for multi-line $...$.
-                     (unless (and (string= why "$")
-                                  (string-match "[\n\r]"
-                                                (buffer-substring-no-properties beg end)))
-                       (setq preview-auto--editing t)
-                       (funcall action (cons beg end)))))))))))
+                     ;; Don't preview empty regions.
+                     (when (string-match-p "[^[:space:]\n\r]"
+                                           (buffer-substring-no-properties
+                                            (+ begin (length why))
+                                            (- end (length end-string))))
+                       ;; Avoid error-prone updates for multi-line $...$.
+                       (unless (and (string= why "$")
+                                    (string-match "[\n\r]"
+                                                  (buffer-substring-no-properties begin end)))
+                         (setq preview-auto--editing t)
+                         (funcall action (cons begin end))))))))))))
        (t
         (setq preview-auto--keepalive nil))))))
 
