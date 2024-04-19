@@ -5,7 +5,7 @@
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.0
 ;; URL: https://github.com/ultronozm/preview-auto.el
-;; Package-Requires: ((emacs "26.1") (auctex))
+;; Package-Requires: ((emacs "26.1") (auctex "14.0.5"))
 ;; Keywords: tex, convenience
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -23,9 +23,10 @@
 
 ;;; Commentary:
 
-;; This package provides a minor mode `preview-auto-mode' that
-;; automatically previews the visible portion of an AUCTeX buffer.
-;; It can be toggled via the Preview menu, or by C-c C-p C-a.
+;; This package provides a minor mode `preview-auto-mode' in which the
+;; visible portion of an AUCTeX buffer is continuously previewed.  It
+;; can be toggled via M-x preview-auto-mode, C-c C-p C-a, or the
+;; Preview menu.
 
 ;;; Code:
 
@@ -54,12 +55,6 @@ For this to have any effect, it must be set before
 
 (defvar preview-auto--timer nil)
 
-(defvar-local preview-auto--timer-enabled nil
-  "Is the preview timer is enabled in this buffer?
-We want the preview timer to be active only in the current buffer.  For
-this reason, it is a global object.  This local variable keeps track of
-the buffers in which the timer should do anything.")
-
 (defvar-local preview-auto--keepalive t
   "Used to keep track of when we should preview some more.")
 
@@ -83,7 +78,9 @@ just beyond the BEGIN delimiter, that returns non-nil if the environment
 is valid.")
 
 (defun preview-auto--cheap-texmathp ()
-  "Return non-nil if point is in a math environment."
+  "Return non-nil if point is in a math environment.
+Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
+`font-latex-math-face'."
   (let ((math-face 'font-latex-math-face)
         (face (plist-get (text-properties-at (point))
                          'face)))
@@ -120,11 +117,10 @@ Ignore comments and verbatim environments."
 
 (defun preview-auto--already-previewed-at (pos)
   "Return non-nil when there a non-disabled preview overlay at POS."
-  (cl-intersection
-   (mapcar
-    (lambda (ov) (overlay-get ov 'preview-state))
-    (overlays-at (or pos (point))))
-   '(active inactive)))
+  (cl-intersection '(active inactive)
+                   (mapcar (lambda (ov)
+                             (overlay-get ov 'preview-state))
+                           (overlays-at (or pos (point))))))
 
 (defcustom preview-auto-predicate nil
   "Additional predicate for determining preview validity.
@@ -171,7 +167,8 @@ customizable predicate `preview-auto-predicate' holds."
   "Return a list describing the non-nil streaks in list LST.
 A streak is a maximal collection of consecutive non-nil values.  We
 describe a streak by a cons cell containing its first and last indices.
-Example: (nil t t nil nil t) => ((1 . 2) (5 . 5)."
+
+Example: (nil t t t nil nil t nil) => ((1 . 3) (6 . 6))"
   (let ((intervals nil)
         (start nil)
         (end nil))
@@ -189,19 +186,16 @@ Example: (nil t t nil nil t) => ((1 . 2) (5 . 5)."
     (nreverse intervals)))
 
 (defcustom preview-auto-barriers
-  '("\\\\begin{abstract}"
-    ;; "\\\\begin{proof}"
-    ;; "\\\\begin{lemma}"
-    )
+  '("\\\\begin{abstract}")
   "List of barrier regexps, excluded from in regions sent for previewing."
   :type '(repeat string))
 
-(defun preview-auto--get-valid-region (beg end direction)
+(defun preview-auto--get-valid-region (beg end search-from-beginning)
   "Return a maximal valid region for previewing between BEG and END.
-DIRECTION determines whether to search from the beginning (if non-nil)
-or the end (if nil)."
+The search starts from BEG if SEARCH-FROM-BEGINNING is non-nil, and
+otherwise from END."
+  (cl-assert (<= end (+ beg preview-auto-chars-above preview-auto-chars-below)))
   (when (<= beg end)
-    (cl-assert (<= end (+ beg preview-auto-chars-above preview-auto-chars-below)))
     (let (envs)
       (save-excursion
         (goto-char beg)
@@ -210,37 +204,37 @@ or the end (if nil)."
         (setq envs (nreverse envs)))
       (when-let* ((streaks (preview-auto--get-streaks
                             (mapcar #'cdr envs))))
-        (let* ((closest (if direction
+        (let* ((closest (if search-from-beginning
                             (car streaks)
                           (car (last streaks)))))
           ;; Shrink the region so that it doesn't cross any barriers.
           (when-let
               ((shortening
-                (if direction
-                    (cl-some (lambda (i)
-                               (when
-                                   (cl-some
-                                    (lambda (re)
-                                      (save-excursion
-                                        (goto-char (cdar (nth i envs)))
-                                        (preview-auto--search
-                                         re (caar (nth (1+ i) envs)))))
-                                    preview-auto-barriers)
-                                 (cons (car closest) i)))
-                             (number-sequence (car closest) (1- (cdr closest))))
-                  (cl-some (lambda (j)
-                             (when
-                                 (cl-some
-                                  (lambda (re)
-                                    (save-excursion
-                                      (goto-char (cdar (nth (1- j) envs)))
-                                      (preview-auto--search
-                                       re (caar (nth j envs)))))
-                                  preview-auto-barriers)
-                               (cons j (cdr closest))))
-                           (number-sequence (cdr closest)
-                                            (1+ (car closest)) -1))
-                  )))
+                (if search-from-beginning
+                    (cl-some
+                     (lambda (i)
+                       (when
+                           (cl-some
+                            (lambda (re)
+                              (save-excursion
+                                (goto-char (cdar (nth i envs)))
+                                (preview-auto--search
+                                 re (caar (nth (1+ i) envs)))))
+                            preview-auto-barriers)
+                         (cons (car closest) i)))
+                     (number-sequence (car closest) (1- (cdr closest))))
+                  (cl-some
+                   (lambda (j)
+                     (when
+                         (cl-some
+                          (lambda (re)
+                            (save-excursion
+                              (goto-char (cdar (nth (1- j) envs)))
+                              (preview-auto--search
+                               re (caar (nth j envs)))))
+                          preview-auto-barriers)
+                       (cons j (cdr closest))))
+                   (number-sequence (cdr closest) (1+ (car closest)) -1)))))
             (setq closest shortening))
           (cons (caar (nth (car closest) envs))
                 (cdar (nth (cdr closest) envs))))))))
@@ -253,35 +247,11 @@ or the end (if nil)."
   "Return last maximal valid region for previewing between BEG and END."
   (preview-auto--get-valid-region beg end nil))
 
-(defun preview-auto--base-range ()
-  "Return the base range for previewing.
-This is a window around point controlled by the user options
-`preview-auto-chars-below' and `preview-auto-chars-above', as well as
-the beginning and end of the document."
-  (let* ((begin-document
-          (or (save-excursion
-                (goto-char (point-min))
-                (when (re-search-forward TeX-header-end nil t)
-                  (match-end 0)))
-              (point-min)))
-         (end-document
-          (or (save-excursion
-                (goto-char (point-min))
-                (when (re-search-forward TeX-trailer-start nil t)
-                  (match-beginning 0)))
-              (point-max)))
-         (pmin (max begin-document
-                    (- (point) preview-auto-chars-above)))
-         (pmax (min end-document
-                    (+ (point) preview-auto-chars-below))))
-    (cons pmin pmax)))
-
 (defvar preview-auto--inhibit-message t
   "If non-nil, inhibit messages in `preview-auto--preview-something'.")
 
 (defun preview-auto--region-wrapper (beg end)
   "Preview region between BEG and END, possibly inhibiting messages."
-  ;; (message "Previewing: (%d, %d)" beg end)
   (let ((inhibit-message preview-auto--inhibit-message))
     (preview-region beg end)))
 
@@ -316,12 +286,35 @@ the beginning and end of the document."
                           "[\n\r]" (buffer-substring-no-properties begin end)))
                   (preview-auto--region-wrapper begin end))))))))))
 
+(defun preview-auto--base-range ()
+  "Return the base range for previewing.
+This is a window around point controlled by the user options
+`preview-auto-chars-below' and `preview-auto-chars-above', as well as
+the beginning and end of the document."
+  (let* ((begin-document
+          (or (save-excursion
+                (goto-char (point-min))
+                (when (re-search-forward TeX-header-end nil t)
+                  (match-end 0)))
+              (point-min)))
+         (end-document
+          (or (save-excursion
+                (goto-char (point-min))
+                (when (re-search-forward TeX-trailer-start nil t)
+                  (match-beginning 0)))
+              (point-max)))
+         (pmin (max begin-document
+                    (- (point) preview-auto-chars-above)))
+         (pmax (min end-document
+                    (+ (point) preview-auto-chars-below))))
+    (cons pmin pmax)))
+
 (defun preview-auto--preview-something ()
   "Run `preview-region' on an appropriate region.
-  Identify top level math environments near the window.  Find a contiguous
-  group of regions at which there are no active or inactive previews at
-  point.  Call `preview-region' on the smallest region that contains this
-  group."
+Identify top level math environments near the window.  Find a contiguous
+group of regions at which there are no active or inactive previews at
+point.  Call `preview-region' on the smallest region that contains this
+group."
   (unless (or (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))
               (get-buffer-process (TeX-process-buffer-name (TeX-master-file))))
     (setq preview-auto--rules (preview-auto--generate-rules))
@@ -341,27 +334,29 @@ the beginning and end of the document."
        (t
         (setq preview-auto--keepalive nil))))))
 
+(defvar preview-auto-mode)
+
 (defun preview-auto--timer-function ()
   "Function called by the preview timer to update LaTeX previews."
   (and (eq major-mode 'LaTeX-mode)
+       preview-auto-mode
        preview-auto--timer
-       preview-auto--timer-enabled
        preview-auto--keepalive
        (preview-auto--preview-something)))
 
 (defun preview-auto-conditionally-enable ()
   "Enable `preview-auto-mode' if appropriate.
-  Check that we are not visiting a bbl file."
+Check that we are not visiting a bbl file."
   (unless (and (buffer-file-name)
                (string-match-p "\\.bbl\\'" (buffer-file-name)))
     (preview-auto-mode 1)))
 
 (defun preview-auto--after-change (beg _end _length)
   "Hook function for `preview-auto-mode'.
-  BEG is the start of the modified region, END is the end of the region,
-  and LENGTH is the length of the modification.  If the modification
-  occurs before some region where a preview is being generated, then
-  cancel the preview, so that the preview is not misplaced."
+BEG is the start of the modified region, END is the end of the region,
+and LENGTH is the length of the modification.  If the modification
+occurs before some region where a preview is being generated, then
+cancel the preview, so that the preview is not misplaced."
   (when (and preview-current-region
              (< beg (cdr preview-current-region)))
     (ignore-errors (TeX-kill-job))))
@@ -392,10 +387,8 @@ the beginning and end of the document."
       (setq preview-auto--timer (run-with-timer preview-auto-interval
                                                 preview-auto-interval
                                                 #'preview-auto--timer-function))
-      (setq preview-auto--timer-enabled t)
       (setq preview-auto--keepalive t)))
    (t
-    (setq preview-auto--timer-enabled nil)
     (remove-hook 'after-change-functions #'preview-auto--after-change t)
     (remove-hook 'post-command-hook #'preview-auto--post-command t))))
 
