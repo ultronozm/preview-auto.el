@@ -1,8 +1,11 @@
-;;; preview-auto.el --- automatic latex previews     -*- lexical-binding: t; -*-
+;;; preview-auto.el --- Automatic previews in AUCTeX     -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2024  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
+;; Version: 0.0
+;; URL: https://github.com/ultronozm/preview-auto.el
+;; Package-Requires: ((emacs "26.1") (auctex))
 ;; Keywords: tex, convenience
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -22,6 +25,7 @@
 
 ;; This package provides a minor mode `preview-auto-mode' that
 ;; automatically previews the visible portion of an AUCTeX buffer.
+;; It can be toggled via the Preview menu, or by C-c C-p C-a.
 
 ;;; Code:
 
@@ -34,7 +38,7 @@
   :group 'preview
   :prefix "preview-auto-")
 
-(defcustom preview-auto-timer-interval 0.3
+(defcustom preview-auto-interval 0.3
   "Interval for preview timer.
 For this to have any effect, it must be set before
 `preview-auto-mode' is activated for the first time."
@@ -59,37 +63,49 @@ the buffers in which the timer should do anything.")
 (defvar-local preview-auto--keepalive t
   "Used to keep track of when we should preview some more.")
 
-(defvar preview-auto--editing nil)
-
-;; (setq preview-leave-open-previews-visible t)
-
 (defcustom preview-auto-rules-function nil
   "Function to generate rules for identifying math environments.
 If non-nil, `preview-auto--generate-rules' delegates to this function.
 The function should return a list of rules for identifying math
 environments, as described in the documentation of
 `preview-auto--generate-rules'."
-  :type '(choice (const :tag "Default" nil) function)
-  :group 'preview-auto)
+  :type '(choice (const :tag "Default" nil) function))
 
-(defun preview-auto--generate-rules ()
-  "Return list of rules for identifying math environments.
+(defcustom preview-auto--extra-environments nil
+  "Extra environments to consider for automatic previewing."
+  :type '(repeat string))
+
+(defvar preview-auto--rules nil
+  "Rules for identifying math environments.
 Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
 BEGIN and END are the delimiters and PREDICATE is a function, called
 just beyond the BEGIN delimiter, that returns non-nil if the environment
-is valid."
+is valid.")
+
+(defun preview-auto--cheap-texmathp ()
+  "Return non-nil if point is in a math environment."
+  (let ((math-face 'font-latex-math-face)
+        (face (plist-get (text-properties-at (point))
+                         'face)))
+    (or (eq face math-face)
+        (and (listp face)
+             (memq math-face face)))))
+
+(defun preview-auto--generate-rules ()
+  "Return list of rules for identifying math environments."
   (if preview-auto-rules-function
       (funcall preview-auto-rules-function)
     (let* ((basic-rules
             (mapcar (lambda (pair)
                       (cons (car pair)
-                            (cons (cdr pair) '(texmathp))))
+                            (cons (cdr pair) '(preview-auto--cheap-texmathp))))
                     '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
            (env-rules
             (mapcar (lambda (env)
                       (cons (format "\\begin{%s}" env)
                             (cons (format "\\end{%s}" env) t)))
-                    texmathp-environments))
+                    (append texmathp-environments
+                            preview-auto--extra-environments)))
            (rules (append basic-rules env-rules)))
       rules)))
 
@@ -113,24 +129,29 @@ Ignore comments and verbatim environments."
 (defcustom preview-auto-predicate nil
   "Additional predicate for determining preview validity.
 See the documentation of `preview-auto--next-env' for details."
-  :type 'function
-  :group 'preview-auto)
+  :type 'function)
 
-(defun preview-auto--next-env (bound rules)
-  "Find next LaTeX math environment before BOUND using RULES.
+(defun preview-auto--truncated-bound (bound)
+  "Return last position before BOUND and any blank lines."
+  (save-excursion
+    (if (re-search-forward "[\n\r][[:space:]]*[\n\r]" bound t)
+        (match-beginning 0)
+      bound)))
+
+(defun preview-auto--next-env (bound)
+  "Find next LaTeX math environment before BOUND.
 Return list of iterated cons cells ((BEGIN . END) . VALIDITY) describing
 the bounds for the environment and whether it is considered valid for
 preview, which means that (1) it consists of more than just
 whitespace, (2) it has not already been previewed, and (3) the
 customizable predicate `preview-auto-predicate' holds."
-  (interactive)
   (catch 'found
-    (let ((begin-regexp (regexp-opt (mapcar #'car rules) t)))
+    (let ((begin-regexp (regexp-opt (mapcar #'car preview-auto--rules) t)))
       (while (preview-auto--search begin-regexp bound)
         (let* ((begin (match-beginning 0))
                (inner-begin (match-end 0))
                (begin-string (match-string 0))
-               (rule (cdr (assoc begin-string rules)))
+               (rule (cdr (assoc begin-string preview-auto--rules)))
                (end-string (car rule))
                (pred (cdr rule)))
           (when (eval pred)
@@ -138,13 +159,12 @@ customizable predicate `preview-auto-predicate' holds."
                 ((limit (preview-auto--truncated-bound bound))
                  (end (preview-auto--search (regexp-quote end-string) limit))
                  (inner-end (- end (length end-string)))
-                 (validity
-                  (and (string-match-p "[^[:space:]\n\r]"
-                                       (buffer-substring-no-properties
-                                        inner-begin inner-end))
-                       (not (preview-auto--already-previewed-at begin))
-                       (or (null preview-auto-predicate)
-                           (funcall preview-auto-predicate)))))
+                 (validity (and (string-match-p "[^[:space:]\n\r]"
+                                                (buffer-substring-no-properties
+                                                 inner-begin inner-end))
+                                (not (preview-auto--already-previewed-at begin))
+                                (or (null preview-auto-predicate)
+                                    (funcall preview-auto-predicate)))))
               (throw 'found (cons (cons begin end) validity)))))))))
 
 (defun preview-auto--get-streaks (lst)
@@ -168,58 +188,77 @@ Example: (nil t t nil nil t) => ((1 . 2) (5 . 5)."
       (push (cons start end) intervals))
     (nreverse intervals)))
 
-(defun preview-auto--get-valid-region (beg end direction rules)
+(defcustom preview-auto-barriers
+  '("\\\\begin{abstract}"
+    ;; "\\\\begin{proof}"
+    ;; "\\\\begin{lemma}"
+    )
+  "List of barrier regexps, excluded from in regions sent for previewing."
+  :type '(repeat string))
+
+(defun preview-auto--get-valid-region (beg end direction)
   "Return a maximal valid region for previewing between BEG and END.
 DIRECTION determines whether to search from the beginning (if non-nil)
-or the end (if nil).  RULES is a list of rules for identifying math
-environments, as described in `preview-auto--generate-rules'."
+or the end (if nil)."
   (when (<= beg end)
     (cl-assert (<= end (+ beg preview-auto-chars-above preview-auto-chars-below)))
     (let (envs)
       (save-excursion
         (goto-char beg)
-        (while-let ((env (preview-auto--next-env end rules)))
+        (while-let ((env (preview-auto--next-env end)))
           (push env envs))
         (setq envs (nreverse envs)))
       (when-let* ((streaks (preview-auto--get-streaks
-                            (mapcar #'cdr envs)))
-                  (closest (if direction
-                               (car streaks)
-                             (car (last streaks)))))
-        (cons (caar (nth (car closest) envs))
-              (cdar (nth (cdr closest) envs)))))))
+                            (mapcar #'cdr envs))))
+        (let* ((closest (if direction
+                            (car streaks)
+                          (car (last streaks)))))
+          ;; Shrink the region so that it doesn't cross any barriers.
+          (when-let
+              ((shortening
+                (if direction
+                    (cl-some (lambda (i)
+                               (when
+                                   (cl-some
+                                    (lambda (re)
+                                      (save-excursion
+                                        (goto-char (cdar (nth i envs)))
+                                        (preview-auto--search
+                                         re (caar (nth (1+ i) envs)))))
+                                    preview-auto-barriers)
+                                 (cons (car closest) i)))
+                             (number-sequence (car closest) (1- (cdr closest))))
+                  (cl-some (lambda (j)
+                             (when
+                                 (cl-some
+                                  (lambda (re)
+                                    (save-excursion
+                                      (goto-char (cdar (nth (1- j) envs)))
+                                      (preview-auto--search
+                                       re (caar (nth j envs)))))
+                                  preview-auto-barriers)
+                               (cons j (cdr closest))))
+                           (number-sequence (cdr closest)
+                                            (1+ (car closest)) -1))
+                  )))
+            (setq closest shortening))
+          (cons (caar (nth (car closest) envs))
+                (cdar (nth (cdr closest) envs))))))))
 
-(defun preview-auto--truncated-bound (bound)
-  "Return last position before BOUND and any blank lines."
-  (save-excursion
-    (if (re-search-forward "[\n\r][[:space:]]*[\n\r]" bound t)
-        (match-beginning 0)
-      bound)))
+(defun preview-auto--first-valid-region (beg end)
+  "Return first maximal valid region for previewing between BEG and END."
+  (preview-auto--get-valid-region beg end t))
 
-(defun preview-auto--first-valid-region (beg end rules)
-  "Return first maximal valid region for previewing between BEG and END.
-Use RULES to identify math environments."
-  (preview-auto--get-valid-region beg end t rules))
+(defun preview-auto--last-valid-region (beg end)
+  "Return last maximal valid region for previewing between BEG and END."
+  (preview-auto--get-valid-region beg end nil))
 
-(defun preview-auto--last-valid-region (beg end rules)
-  "Return last maximal valid region for previewing between BEG and END.
-Use RULES to identify math environments."
-  (preview-auto--get-valid-region beg end nil rules))
-
-(defvar preview-auto--inhibit-message t
-  "If non-nil, inhibit messages in `preview-auto--preview-something'.")
-
-(defun preview-auto--preview-something (rules)
-  "Run `preview-region' on an appropriate region.
-Identify top level math environments near the window using RULES.  Find
-the first contiguous group of regions at which there are no active or
-inactive previews at point.  Call `preview-region' on the smallest
-region that contains this group."
-  (interactive)
-  (unless (or (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))
-              (get-buffer-process (TeX-process-buffer-name (TeX-master-file))))
-    (let*
-        ((begin-document
+(defun preview-auto--base-range ()
+  "Return the base range for previewing.
+This is a window around point controlled by the user options
+`preview-auto-chars-below' and `preview-auto-chars-above', as well as
+the beginning and end of the document."
+  (let* ((begin-document
           (or (save-excursion
                 (goto-char (point-min))
                 (when (re-search-forward TeX-header-end nil t)
@@ -234,150 +273,135 @@ region that contains this group."
          (pmin (max begin-document
                     (- (point) preview-auto-chars-above)))
          (pmax (min end-document
-                    (+ (point) preview-auto-chars-below)))
-         (action (lambda (region)
-                   (let ((inhibit-message preview-auto--inhibit-message))
-                     (preview-region (car region) (cdr region)))))
-         region)
+                    (+ (point) preview-auto-chars-below))))
+    (cons pmin pmax)))
+
+(defvar preview-auto--inhibit-message t
+  "If non-nil, inhibit messages in `preview-auto--preview-something'.")
+
+(defun preview-auto--region-wrapper (beg end)
+  "Preview region between BEG and END, possibly inhibiting messages."
+  ;; (message "Previewing: (%d, %d)" beg end)
+  (let ((inhibit-message preview-auto--inhibit-message))
+    (preview-region beg end)))
+
+(defun preview-auto--update-editing-region ()
+  "Update preview of environment being edited."
+  (when (texmathp)
+    (let ((why (car texmathp-why))
+          (begin (cdr texmathp-why)))
+      (when (and (not (preview-auto--already-previewed-at begin))
+                 (or (null preview-auto-predicate)
+                     (funcall preview-auto-predicate)))
+        (unless (member why '("$" "$$" "\\(" "\\["))
+          (setq why (format "\\begin{%s}" why)))
+        (let ((limit (save-excursion
+                       (goto-char begin)
+                       (preview-auto--truncated-bound (point-max)))))
+          (when (> limit (point))
+            (when-let*
+                ((end-string (cadr (assoc why preview-auto--rules)))
+                 (end (save-excursion
+                        (preview-auto--search (regexp-quote end-string)
+                                              limit))))
+              ;; Don't preview empty regions.
+              (when (string-match-p "[^[:space:]\n\r]"
+                                    (buffer-substring-no-properties
+                                     (+ begin (length why))
+                                     (- end (length end-string))))
+                ;; Avoid error-prone updates for multi-line $...$.
+                (unless
+                    (and (string= why "$")
+                         (string-match
+                          "[\n\r]" (buffer-substring-no-properties begin end)))
+                  (preview-auto--region-wrapper begin end))))))))))
+
+(defun preview-auto--preview-something ()
+  "Run `preview-region' on an appropriate region.
+  Identify top level math environments near the window.  Find a contiguous
+  group of regions at which there are no active or inactive previews at
+  point.  Call `preview-region' on the smallest region that contains this
+  group."
+  (unless (or (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))
+              (get-buffer-process (TeX-process-buffer-name (TeX-master-file))))
+    (setq preview-auto--rules (preview-auto--generate-rules))
+    (pcase-let ((`(,pmin . ,pmax) (preview-auto--base-range)))
       (setq preview-auto--keepalive t)
-      (setq preview-auto--editing nil)
       (cond
-       ;; Attempt to preview something about point.
-       ((setq region (preview-auto--last-valid-region
-                      pmin (min end-document (point)) rules))
-        (funcall action region))
-       ;; Attempt to preview something below point.
-       ((setq region (preview-auto--first-valid-region
-                      (max begin-document (point)) pmax rules))
-        (funcall action region))
-       ;; Attempt update of env being edited.
+       ((when-let ((region (preview-auto--last-valid-region
+                            pmin (min pmax (point)))))
+          (preview-auto--region-wrapper (car region) (cdr region))))
+       ((when-let ((region (preview-auto--first-valid-region
+                            (max pmin (point)) pmax)))
+          (preview-auto--region-wrapper (car region) (cdr region))))
        ((and
+         (< pmin (point) pmax)
          preview-protect-point
-         (< begin-document (point) end-document)
-         (when (texmathp)
-           (let ((why (car texmathp-why))
-                 (begin (cdr texmathp-why)))
-             (when (and (not (preview-auto--already-previewed-at begin))
-                        (or (null preview-auto-predicate)
-                            (funcall preview-auto-predicate)))
-               (unless (member why '("$" "$$" "\\(" "\\["))
-                 (setq why (format "\\begin{%s}" why)))
-               (let ((limit (save-excursion
-                              (goto-char begin)
-                              (preview-auto--truncated-bound (point-max)))))
-                 (when (> limit (point))
-                   (when-let*
-                       ((end-string (cadr (assoc why rules)))
-                        (end (save-excursion
-                               (preview-auto--search (regexp-quote end-string) limit))))
-                     ;; Don't preview empty regions.
-                     (when (string-match-p "[^[:space:]\n\r]"
-                                           (buffer-substring-no-properties
-                                            (+ begin (length why))
-                                            (- end (length end-string))))
-                       ;; Avoid error-prone updates for multi-line $...$.
-                       (unless (and (string= why "$")
-                                    (string-match "[\n\r]"
-                                                  (buffer-substring-no-properties begin end)))
-                         (setq preview-auto--editing t)
-                         (funcall action (cons begin end))))))))))))
+         (preview-auto--update-editing-region)))
        (t
         (setq preview-auto--keepalive nil))))))
 
 (defun preview-auto--timer-function ()
   "Function called by the preview timer to update LaTeX previews."
-  (interactive)
   (and (eq major-mode 'LaTeX-mode)
        preview-auto--timer
        preview-auto--timer-enabled
        preview-auto--keepalive
-       (preview-auto--preview-something (preview-auto--generate-rules))))
+       (preview-auto--preview-something)))
 
 (defun preview-auto-conditionally-enable ()
   "Enable `preview-auto-mode' if appropriate.
-Check that we are not visiting a bbl file."
+  Check that we are not visiting a bbl file."
   (unless (and (buffer-file-name)
                (string-match-p "\\.bbl\\'" (buffer-file-name)))
     (preview-auto-mode 1)))
 
-(defun preview-auto--after-change-function (beg _end _length)
+(defun preview-auto--after-change (beg _end _length)
   "Hook function for `preview-auto-mode'.
-BEG is the start of the modified region, END is the end of the region,
-and LENGTH is the length of the modification.  If the modification
-occurs before some region where a preview is being generated, then
-cancel the preview, so that the preview is not misplaced."
+  BEG is the start of the modified region, END is the end of the region,
+  and LENGTH is the length of the modification.  If the modification
+  occurs before some region where a preview is being generated, then
+  cancel the preview, so that the preview is not misplaced."
   (when (and preview-current-region
              (< beg (cdr preview-current-region)))
     (ignore-errors (TeX-kill-job))))
 
-(defun preview-auto--post-command-function ()
+(defun preview-auto--post-command ()
   "Function called after each command in `preview-auto-mode'."
   (setq preview-auto--keepalive t))
 
 (defvar preview-auto-mode)
 
-(defun preview-auto--delete-blank-lines-if-editing (str)
-  "Remove blank lines from STR if we are editing a preview.
-Return the result.  This function is intended to be used as a
-`preview-preprocess-function'."
-  ;; We check whether `preview-auto-mode' is active because
-  ;; `preview-preprocess-functions' is not buffer-local, so we don't
-  ;; want to remove this function from that list when we deactivate
-  ;; `preview-auto-mode'.
-  (if (and preview-auto-mode preview-auto--editing)
-      (with-temp-buffer
-        (insert str)
-        (goto-char (point-min))
-        (while (re-search-forward "^[[:space:]]*[\n\r]" nil t)
-          (replace-match "" nil nil))
-        (buffer-substring-no-properties (point-min) (point-max)))
-    str))
-
-(defun preview-auto--find-end-function (region-beg)
-  "Find end of LaTeX math environment starting at REGION-BEG.
-This takes into account newlines that occur in regions that are
-currently being edited.  TODO: write more"
-  (or (and preview-auto--editing
-           (save-excursion
-             (goto-char region-beg)
-             (when (looking-at "\\\\begin{[^}]*}")
-               (goto-char (match-end 0))
-               (LaTeX-find-matching-end))))
-      (point)))
-
 ;;;###autoload
 (define-minor-mode preview-auto-mode
   "Minor mode for running LaTeX preview on a timer."
   :lighter nil
-  :group 'preview-auto
   (cond
    (preview-auto-mode
     (progn
-      ;; (when (equal (TeX-master-file) "<none>")
-      ;;   (user-error "Can't activate preview-auto-mode: either visit a valid TeX file, or set `TeX-master' to one"))
       (unless TeX-header-end
         (setq TeX-header-end LaTeX-header-end))
       (unless TeX-trailer-start
         (setq TeX-trailer-start LaTeX-trailer-start))
-      (add-hook 'after-change-functions #'preview-auto--after-change-function nil t)
-      (add-hook 'post-command-hook #'preview-auto--post-command-function nil t)
+      (add-hook 'after-change-functions #'preview-auto--after-change nil t)
+      (add-hook 'post-command-hook #'preview-auto--post-command nil t)
       (when preview-auto--timer
         ;; Reset the timer, in case it's borked.
         (cancel-timer preview-auto--timer)
         (setq preview-auto--timer nil))
-      (setq preview-auto--timer (run-with-timer preview-auto-timer-interval
-                                                preview-auto-timer-interval
+      (setq preview-auto--timer (run-with-timer preview-auto-interval
+                                                preview-auto-interval
                                                 #'preview-auto--timer-function))
       (setq preview-auto--timer-enabled t)
       (setq preview-auto--keepalive t)))
    (t
     (setq preview-auto--timer-enabled nil)
-    (remove-hook 'after-change-functions #'preview-auto--after-change-function t)
-    (remove-hook 'post-command-hook #'preview-auto--post-command-function t))))
+    (remove-hook 'after-change-functions #'preview-auto--after-change t)
+    (remove-hook 'post-command-hook #'preview-auto--post-command t))))
 
 (defun preview-auto-setup ()
   "Hook function for installing bind and menu item."
-  (remove-hook 'LaTeX-mode-hook #'preview-auto-setup)  
+  (remove-hook 'LaTeX-mode-hook #'preview-auto-setup)
   (define-key LaTeX-mode-map (kbd "C-c C-p C-a") #'preview-auto-mode)
   (easy-menu-add-item
    nil '("Preview")
@@ -385,8 +409,6 @@ currently being edited.  TODO: write more"
    "(or toggle) at point"))
 
 (add-hook 'LaTeX-mode-hook #'preview-auto-setup)
-
-
 
 (provide 'preview-auto)
 ;;; preview-auto.el ends here
