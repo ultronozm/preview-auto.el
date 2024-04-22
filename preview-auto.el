@@ -27,6 +27,13 @@
 ;; visible portion of an AUCTeX buffer is continuously previewed.  It
 ;; can be toggled via M-x preview-auto-mode, C-c C-p C-a, or the
 ;; Preview menu.
+;;
+;; The following settings are recommended:
+;;
+;; (setq preview-protect-point t)
+;; (setq preview-locating-previews-message nil)
+;; (setq preview-leave-open-previews-visible t)
+;; (setq preview-LaTeX-command-replacements '(preview-LaTeX-disable-pdfoutput))
 
 ;;; Code:
 
@@ -36,8 +43,7 @@
 
 (defgroup preview-auto nil
   "Settings for preview-auto."
-  :group 'preview
-  :prefix "preview-auto-")
+  :group 'preview)
 
 (defcustom preview-auto-interval 0.3
   "Interval for preview timer.
@@ -77,6 +83,9 @@ BEGIN and END are the delimiters and PREDICATE is a function, called
 just beyond the BEGIN delimiter, that returns non-nil if the environment
 is valid.")
 
+(defvar preview-auto--begin-re nil
+  "Regular expression for identifying the beginning of a math environment.")
+
 (defun preview-auto--cheap-texmathp ()
   "Return non-nil if point is in a math environment.
 Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
@@ -106,21 +115,33 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
            (rules (append basic-rules env-rules)))
       rules)))
 
+(defun preview-auto--cheap-comment ()
+  "Return non-nil if point is in a comment or verbatim environment.
+Implemented using font-lock faces."
+  (let ((comment-faces '(font-lock-comment-face
+                         font-latex-verbatim-face))
+        (face (plist-get (text-properties-at (point))
+                         'face)))
+    (or
+     (memq face comment-faces)
+     (and
+      (listp face)
+      (cl-some (lambda (f) (memq f comment-faces)) face)))))
+
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
 Ignore comments and verbatim environments."
   (catch 'found
     (while (re-search-forward regexp bound t)
-      (when (and (not (TeX-in-comment))
-                 (not (LaTeX-verbatim-p)))
+      (when (not (preview-auto--cheap-comment))
         (throw 'found (point))))))
 
 (defun preview-auto--already-previewed-at (pos)
   "Return non-nil when there a non-disabled preview overlay at POS."
-  (cl-intersection '(active inactive)
-                   (mapcar (lambda (ov)
+  (cl-intersection (mapcar (lambda (ov)
                              (overlay-get ov 'preview-state))
-                           (overlays-at (or pos (point))))))
+                           (overlays-at (or pos (point))))
+                   '(active inactive)))
 
 (defcustom preview-auto-predicate nil
   "Additional predicate for determining preview validity.
@@ -142,26 +163,26 @@ preview, which means that (1) it consists of more than just
 whitespace, (2) it has not already been previewed, and (3) the
 customizable predicate `preview-auto-predicate' holds."
   (catch 'found
-    (let ((begin-regexp (regexp-opt (mapcar #'car preview-auto--rules) t)))
-      (while (preview-auto--search begin-regexp bound)
-        (let* ((begin (match-beginning 0))
-               (inner-begin (match-end 0))
-               (begin-string (match-string 0))
-               (rule (cdr (assoc begin-string preview-auto--rules)))
-               (end-string (car rule))
-               (pred (cdr rule)))
-          (when (eval pred)
-            (when-let*
-                ((limit (preview-auto--truncated-bound bound))
-                 (end (preview-auto--search (regexp-quote end-string) limit))
-                 (inner-end (- end (length end-string)))
-                 (validity (and (string-match-p "[^[:space:]\n\r]"
-                                                (buffer-substring-no-properties
-                                                 inner-begin inner-end))
-                                (not (preview-auto--already-previewed-at begin))
-                                (or (null preview-auto-predicate)
-                                    (funcall preview-auto-predicate)))))
-              (throw 'found (cons (cons begin end) validity)))))))))
+    (while (preview-auto--search preview-auto--begin-re bound)
+      (let* ((begin (match-beginning 0))
+             (inner-begin (match-end 0))
+             (begin-string (match-string 0))
+             (rule (cdr (assoc begin-string preview-auto--rules)))
+             (end-string (car rule))
+             (pred (cdr rule)))
+        (when (eval pred)
+          (when-let*
+              ((limit (preview-auto--truncated-bound bound))
+               (end (preview-auto--search (regexp-quote end-string) limit))
+               (inner-end (- end (length end-string)))
+               (validity (and
+                          (string-match-p "[^[:space:]\n\r]"
+                                          (buffer-substring-no-properties
+                                           inner-begin inner-end))
+                          (not (preview-auto--already-previewed-at begin))
+                          (or (null preview-auto-predicate)
+                              (funcall preview-auto-predicate)))))
+            (throw 'found (cons (cons begin end) validity))))))))
 
 (defun preview-auto--get-streaks (lst)
   "Return a list describing the non-nil streaks in list LST.
@@ -248,10 +269,16 @@ otherwise from END."
   (preview-auto--get-valid-region beg end nil))
 
 (defvar preview-auto--inhibit-message t
-  "If non-nil, inhibit messages in `preview-auto--preview-something'.")
+  "If non-nil, inhibit messages in `preview-auto--preview-something'.
+It can be useful to turn this off when using edebug.")
+
+(defvar preview-auto--debug nil
+  "If non-nil, print debug messages.")
 
 (defun preview-auto--region-wrapper (beg end)
   "Preview region between BEG and END, possibly inhibiting messages."
+  (when preview-auto--debug
+    (message "Previewing region %d,  %d" beg end))
   (let ((inhibit-message preview-auto--inhibit-message))
     (preview-region beg end)))
 
@@ -318,6 +345,7 @@ group."
   (unless (or (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))
               (get-buffer-process (TeX-process-buffer-name (TeX-master-file))))
     (setq preview-auto--rules (preview-auto--generate-rules))
+    (setq preview-auto--begin-re (regexp-opt (mapcar #'car preview-auto--rules) t))
     (pcase-let ((`(,pmin . ,pmax) (preview-auto--base-range)))
       (setq preview-auto--keepalive t)
       (cond
@@ -381,7 +409,7 @@ cancel the preview, so that the preview is not misplaced."
       (add-hook 'after-change-functions #'preview-auto--after-change nil t)
       (add-hook 'post-command-hook #'preview-auto--post-command nil t)
       (when preview-auto--timer
-        ;; Reset the timer, in case it's borked.
+        ;; Reset the timer, in case it's broken.
         (cancel-timer preview-auto--timer)
         (setq preview-auto--timer nil))
       (setq preview-auto--timer (run-with-timer preview-auto-interval
@@ -402,6 +430,8 @@ cancel the preview, so that the preview is not misplaced."
    "(or toggle) at point"))
 
 (add-hook 'LaTeX-mode-hook #'preview-auto-setup)
+
+;; (let ((time (current-time))) (dotimes (x 1000) (preview-auto--last-valid-region (- (point) 10000) (point))) (let ((time2 (current-time))) (message "time: %s msec" (* 1000 (float-time (time-subtract time2 time))))))
 
 (provide 'preview-auto)
 ;;; preview-auto.el ends here
