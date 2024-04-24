@@ -207,7 +207,8 @@ Example: (nil t t t nil nil t nil) => ((1 . 3) (6 . 6))"
     (nreverse intervals)))
 
 (defcustom preview-auto-barriers
-  '("\\\\begin{abstract}")
+  '("\\\\begin{abstract}"
+    "\\\\includegraphics")
   "List of barrier regexps, excluded from in regions sent for previewing."
   :type '(repeat string))
 
