@@ -45,7 +45,7 @@
   "Settings for preview-auto."
   :group 'preview)
 
-(defcustom preview-auto-interval 0.3
+(defcustom preview-auto-interval 0.1
   "Interval for preview timer.
 For this to have any effect, it must be set before
 `preview-auto-mode' is activated for the first time."
