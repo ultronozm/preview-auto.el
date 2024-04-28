@@ -276,10 +276,19 @@ It can be useful to turn this off when using edebug.")
 (defvar preview-auto--debug nil
   "If non-nil, print debug messages.")
 
+(defun preview-auto--debug-log (format-string &rest args)
+  "Print a debug message if `preview-auto--debug' is non-nil."
+  (when preview-auto--debug
+    (with-current-buffer (get-buffer-create "*preview-auto-debug*")
+      (goto-char (point-min))
+      (insert
+       (format-time-string "%Y-%m-%d %H:%M:%S.%6N ")
+       (apply #'format format-string args))
+      (insert "\n"))))
+
 (defun preview-auto--region-wrapper (beg end)
   "Preview region between BEG and END, possibly inhibiting messages."
-  (when preview-auto--debug
-    (message "Previewing region %d,  %d" beg end))
+  ;; (preview-auto--debug-log "Previewing region %d,  %d" beg end)
   (let ((inhibit-message preview-auto--inhibit-message))
     (preview-region beg end)))
 
@@ -312,6 +321,7 @@ It can be useful to turn this off when using edebug.")
                     (and (string= why "$")
                          (string-match
                           "[\n\r]" (buffer-substring-no-properties begin end)))
+                  (preview-auto--debug-log "Previewing editing region %d, %d" begin end)
                   (preview-auto--region-wrapper begin end))))))))))
 
 (defun preview-auto--base-range ()
@@ -352,9 +362,11 @@ group."
       (cond
        ((when-let ((region (preview-auto--last-valid-region
                             pmin (min pmax (point)))))
+          (preview-auto--debug-log "Previewing above: %d, %d" (car region) (cdr region))
           (preview-auto--region-wrapper (car region) (cdr region))))
        ((when-let ((region (preview-auto--first-valid-region
                             (max pmin (point)) pmax)))
+          (preview-auto--debug-log "Previewing below: %d, %d" (car region) (cdr region))
           (preview-auto--region-wrapper (car region) (cdr region))))
        ((and
          (< pmin (point) pmax)
@@ -380,15 +392,29 @@ Check that we are not visiting a bbl file."
                (string-match-p "\\.bbl\\'" (buffer-file-name)))
     (preview-auto-mode 1)))
 
-(defun preview-auto--after-change (beg _end _length)
+(defun preview-auto--after-change (beg end length)
   "Hook function for `preview-auto-mode'.
 BEG is the start of the modified region, END is the end of the region,
 and LENGTH is the length of the modification.  If the modification
 occurs before some region where a preview is being generated, then
 cancel the preview, so that the preview is not misplaced."
-  (when (and preview-current-region
-             (< beg (cdr preview-current-region)))
-    (ignore-errors (TeX-kill-job))))
+  (preview-auto--debug-log "After change:")
+  (preview-auto--debug-log "  %d, %d, %d" beg end length)
+  (when preview-current-region
+    (preview-auto--debug-log "  (%d, %d)"
+                             (car preview-current-region)
+                             (cdr preview-current-region))
+    (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))))
+      (preview-auto--debug-log "  region: %s" proc))
+    (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-master-file)))))
+      (preview-auto--debug-log "  master: %s" proc)))
+  (if (and preview-current-region
+           (< beg (cdr preview-current-region)))
+      (progn
+        (preview-auto--debug-log "Cancelling preview")
+        (ignore-errors (TeX-kill-job))
+        (setq preview-abort-flag t))
+    (preview-auto--debug-log "Not cancelling preview")))
 
 (defun preview-auto--post-command ()
   "Function called after each command in `preview-auto-mode'."
