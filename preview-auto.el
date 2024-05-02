@@ -136,12 +136,33 @@ Ignore comments and verbatim environments."
       (when (not (preview-auto--cheap-comment))
         (throw 'found (point))))))
 
-(defun preview-auto--already-previewed-at (pos)
-  "Return non-nil when there a non-disabled preview overlay at POS."
-  (cl-intersection (mapcar (lambda (ov)
-                             (overlay-get ov 'preview-state))
-                           (overlays-at (or pos (point))))
-                   '(active inactive)))
+(defcustom preview-auto-refresh-after-compilation t
+  "If non-nil, refresh previews after each compilation.
+This plays well with the packages `tex-numbers' and `tex-continuous':
+the result is that preview equation numbers are updated automatically to
+the correct form."
+  :type 'boolean)
+
+(defun preview-auto--already-previewed-at (&optional pos)
+  "Return non-nil when there is a non-disabled preview overlay at POS.
+A preview is considered non-disabled if it is active or inactive
+according to `preview.el'.  If `preview-auto-refresh-after-compilation'
+is non-nil, then we further require that the preview has been generated
+more recently than the aux file."
+  (cl-some
+   (lambda (ov)
+     (and
+      (memq (overlay-get ov 'preview-state) '(active inactive))
+      (or (null preview-auto-refresh-after-compilation)
+          (let* ((image (overlay-get ov 'preview-image))
+                 (image-file (nth 1 image))
+                 (image-time (nth 5 (file-attributes image-file)))
+                 (aux-file (TeX-master-file "aux"))
+                 (aux-time (nth 5 (file-attributes aux-file))))
+            (or (null image-time)
+                (null aux-time)
+                (time-less-p aux-time image-time))))))
+   (overlays-at (or pos (point)))))
 
 (defcustom preview-auto-predicate nil
   "Additional predicate for determining preview validity.
