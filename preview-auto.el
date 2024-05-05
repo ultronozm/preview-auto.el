@@ -143,6 +143,13 @@ the result is that preview equation numbers are updated automatically to
 the correct form."
   :type 'boolean)
 
+(defun preview-auto--tex-fold-at (&optional pos)
+  "Return non-nil when there is a tex-fold at POS."
+  (cl-some
+   (lambda (ov)
+     (eq (overlay-get ov 'category) 'TeX-fold))
+   (overlays-at (or pos (point)))))
+
 (defun preview-auto--already-previewed-at (&optional pos)
   "Return non-nil when there is a non-disabled preview overlay at POS.
 A preview is considered non-disabled if it is active or inactive
@@ -168,6 +175,13 @@ more recently than the aux file."
   "Additional predicate for determining preview validity.
 See the documentation of `preview-auto--next-env' for details."
   :type 'function)
+
+(defun preview-auto--allow-at (&optional pos)
+  "Return non-nil if previewing should happen at POS."
+  (and (not (preview-auto--tex-fold-at pos))
+       (not (preview-auto--already-previewed-at pos))
+       (or (null preview-auto-predicate)
+           (funcall preview-auto-predicate))))
 
 (defun preview-auto--truncated-bound (bound)
   "Return last position before BOUND and any blank lines."
@@ -195,15 +209,13 @@ customizable predicate `preview-auto-predicate' holds."
           (when-let*
               ((limit (preview-auto--truncated-bound bound))
                (end (preview-auto--search (regexp-quote end-string) limit))
-               (inner-end (- end (length end-string)))
-               (validity (and
-                          (string-match-p "[^[:space:]\n\r]"
-                                          (buffer-substring-no-properties
-                                           inner-begin inner-end))
-                          (not (preview-auto--already-previewed-at begin))
-                          (or (null preview-auto-predicate)
-                              (funcall preview-auto-predicate)))))
-            (throw 'found (cons (cons begin end) validity))))))))
+               (inner-end (- end (length end-string))))
+            (let ((validity (and
+                             (string-match-p "[^[:space:]\n\r]"
+                                             (buffer-substring-no-properties
+                                              inner-begin inner-end))
+                             (preview-auto--allow-at begin))))
+              (throw 'found (cons (cons begin end) validity)))))))))
 
 (defun preview-auto--get-streaks (lst)
   "Return a list describing the non-nil streaks in list LST.
@@ -229,7 +241,14 @@ Example: (nil t t t nil nil t nil) => ((1 . 3) (6 . 6))"
 
 (defcustom preview-auto-barriers
   '("\\\\begin{abstract}"
-    "\\\\includegraphics")
+    "\\\\includegraphics"
+    "\\\\part"
+    "\\\\chapter"
+    "\\\\section"
+    "\\\\subsection"
+    "\\\\subsubsection"
+    "\\\\paragraph"
+    "\\\\subparagraph")
   "List of barrier regexps, excluded from in regions sent for previewing."
   :type '(repeat string))
 
@@ -318,9 +337,7 @@ It can be useful to turn this off when using edebug.")
   (when (texmathp)
     (let ((why (car texmathp-why))
           (begin (cdr texmathp-why)))
-      (when (and (not (preview-auto--already-previewed-at begin))
-                 (or (null preview-auto-predicate)
-                     (funcall preview-auto-predicate)))
+      (when (preview-auto--allow-at begin)
         (unless (member why '("$" "$$" "\\(" "\\["))
           (setq why (format "\\begin{%s}" why)))
         (let ((limit (save-excursion
