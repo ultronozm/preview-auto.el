@@ -3,7 +3,7 @@
 ;; Copyright (C) 2024  Paul D. Nelson
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
-;; Version: 0.0
+;; Version: 0.1
 ;; URL: https://github.com/ultronozm/preview-auto.el
 ;; Package-Requires: ((emacs "26.1") (auctex "14.0.5"))
 ;; Keywords: tex, convenience
@@ -55,7 +55,7 @@ For this to have any effect, it must be set before
   "Controls how many characters above point to preview."
   :type 'integer)
 
-(defcustom preview-auto-chars-below 10000
+(defcustom preview-auto-chars-below 6000
   "Controls how many characters below point to preview."
   :type 'integer)
 
@@ -64,29 +64,11 @@ For this to have any effect, it must be set before
 (defvar-local preview-auto--keepalive t
   "Used to keep track of when we should preview some more.")
 
-(defcustom preview-auto-rules-function nil
-  "Function to generate rules for identifying math environments.
-If non-nil, `preview-auto--generate-rules' delegates to this function.
-The function should return a list of rules for identifying math
-environments, as described in the documentation of
-`preview-auto--generate-rules'."
-  :type '(choice (const :tag "Default" nil) function))
-
 (defcustom preview-auto--extra-environments nil
   "Extra environments to consider for automatic previewing."
   :type '(repeat string))
 
-(defvar preview-auto--rules nil
-  "Rules for identifying math environments.
-Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
-BEGIN and END are the delimiters and PREDICATE is a function, called
-just beyond the BEGIN delimiter, that returns non-nil if the environment
-is valid.")
-
-(defvar preview-auto--begin-re nil
-  "Regular expression for identifying the beginning of a math environment.")
-
-(defun preview-auto--cheap-texmathp ()
+(defun preview-auto--math-p ()
   "Return non-nil if point is in a math environment.
 Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
 `font-latex-math-face'."
@@ -99,23 +81,31 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
 
 (defun preview-auto--generate-rules ()
   "Return list of rules for identifying math environments."
-  (if preview-auto-rules-function
-      (funcall preview-auto-rules-function)
-    (let* ((basic-rules
-            (mapcar (lambda (pair)
-                      (cons (car pair)
-                            (cons (cdr pair) '(preview-auto--cheap-texmathp))))
-                    '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
-           (env-rules
-            (mapcar (lambda (env)
-                      (cons (format "\\begin{%s}" env)
-                            (cons (format "\\end{%s}" env) t)))
-                    (append texmathp-environments
-                            preview-auto--extra-environments)))
-           (rules (append basic-rules env-rules)))
-      rules)))
+  (let* ((basic-rules
+          (mapcar (lambda (pair)
+                    (cons (car pair)
+                          (cons (cdr pair) '(preview-auto--math-p))))
+                  '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
+         (env-rules
+          (mapcar (lambda (env)
+                    (cons (format "\\begin{%s}" env)
+                          (cons (format "\\end{%s}" env) t)))
+                  (append texmathp-environments
+                          preview-auto--extra-environments)))
+         (rules (append basic-rules env-rules)))
+    rules))
 
-(defun preview-auto--cheap-comment ()
+(defvar-local preview-auto--rules nil
+  "Rules for identifying math environments.
+Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
+BEGIN and END are the delimiters and PREDICATE is a function, called
+just beyond the BEGIN delimiter, that returns non-nil if the environment
+is valid.")
+
+(defvar-local preview-auto--begin-re nil
+  "Regular expression for identifying the beginning of a math environment.")
+
+(defun preview-auto--comment-p ()
   "Return non-nil if point is in a comment or verbatim environment.
 Implemented using font-lock faces."
   (let ((comment-faces '(font-lock-comment-face
@@ -133,7 +123,7 @@ Implemented using font-lock faces."
 Ignore comments and verbatim environments."
   (catch 'found
     (while (re-search-forward regexp bound t)
-      (when (not (preview-auto--cheap-comment))
+      (when (not (preview-auto--comment-p))
         (throw 'found (point))))))
 
 (defcustom preview-auto-refresh-after-compilation t
@@ -142,6 +132,11 @@ This plays well with the packages `tex-numbers' and `tex-continuous':
 the result is that preview equation numbers are updated automatically to
 the correct form."
   :type 'boolean)
+
+(defconst preview-auto--refresh-delay '(0 1)
+  "Delay in seconds before refreshing previews after compilation.
+This is used to avoid refreshing previews while the aux file is in some
+intermediate state.")
 
 (defun preview-auto--tex-fold-at (&optional pos)
   "Return non-nil when there is a tex-fold at POS."
@@ -164,11 +159,14 @@ more recently than the aux file."
           (let* ((image (overlay-get ov 'preview-image))
                  (image-file (nth 1 image))
                  (image-time (nth 5 (file-attributes image-file)))
-                 (aux-file (TeX-master-file "aux"))
+                 (aux-file (TeX-master-output-file "aux"))
                  (aux-time (nth 5 (file-attributes aux-file))))
             (or (null image-time)
                 (null aux-time)
-                (time-less-p aux-time image-time))))))
+                (time-less-p aux-time image-time)
+                (time-less-p (current-time)
+                             (time-add aux-time
+                                       preview-auto--refresh-delay)))))))
    (overlays-at (or pos (point)))))
 
 (defcustom preview-auto-predicate nil
@@ -309,10 +307,6 @@ otherwise from END."
   "Return last maximal valid region for previewing between BEG and END."
   (preview-auto--get-valid-region beg end nil))
 
-(defvar preview-auto--inhibit-message t
-  "If non-nil, inhibit messages in `preview-auto--preview-something'.
-It can be useful to turn this off when using edebug.")
-
 (defvar preview-auto--debug nil
   "If non-nil, print debug messages.")
 
@@ -326,11 +320,22 @@ It can be useful to turn this off when using edebug.")
        (apply #'format format-string args))
       (insert "\n"))))
 
+(defun preview-auto--silent-write-region (orig-fun &rest args)
+  "Like `write-region', but suppresses messages.
+Imperfection: still causes current message to disappear."
+  (let ((noninteractive t)
+        (inhibit-message t)
+        message-log-max)
+    (apply orig-fun args)))
+
 (defun preview-auto--region-wrapper (beg end)
   "Preview region between BEG and END, possibly inhibiting messages."
-  ;; (preview-auto--debug-log "Previewing region %d,  %d" beg end)
-  (let ((inhibit-message preview-auto--inhibit-message))
-    (preview-region beg end)))
+  (preview-auto--debug-log "Previewing region %d,  %d" beg end)
+  (let ((TeX-suppress-compilation-message t)
+        (save-silently t))
+    (advice-add 'write-region :around #'preview-auto--silent-write-region)
+    (preview-region beg end)
+    (advice-remove 'write-region #'preview-auto--silent-write-region)))
 
 (defun preview-auto--update-editing-region ()
   "Update preview of environment being edited."
@@ -359,7 +364,7 @@ It can be useful to turn this off when using edebug.")
                     (and (string= why "$")
                          (string-match
                           "[\n\r]" (buffer-substring-no-properties begin end)))
-                  (preview-auto--debug-log "Previewing editing region %d, %d" begin end)
+                  (preview-auto--debug-log "Previewing editing region")
                   (preview-auto--region-wrapper begin end))))))))))
 
 (defun preview-auto--base-range ()
@@ -398,18 +403,27 @@ group."
     (pcase-let ((`(,pmin . ,pmax) (preview-auto--base-range)))
       (setq preview-auto--keepalive t)
       (cond
-       ((when-let ((region (preview-auto--last-valid-region
-                            pmin (min pmax (point)))))
-          (preview-auto--debug-log "Previewing above: %d, %d" (car region) (cdr region))
-          (preview-auto--region-wrapper (car region) (cdr region))))
-       ((when-let ((region (preview-auto--first-valid-region
-                            (max pmin (point)) pmax)))
-          (preview-auto--debug-log "Previewing below: %d, %d" (car region) (cdr region))
-          (preview-auto--region-wrapper (car region) (cdr region))))
        ((and
          (< pmin (point) pmax)
          preview-protect-point
          (preview-auto--update-editing-region)))
+       ((let ((region-above (preview-auto--last-valid-region
+                             pmin (min pmax (point))))
+              (region-below (preview-auto--first-valid-region
+                             (max pmin (point)) pmax)))
+          (when (or region-above region-below)
+            (let* ((should-preview-above (or (not region-below)
+                                             (and region-above region-below
+                                                  (<= (- (point) (cdr region-above))
+                                                      (- (car region-below) (point))))))
+                   (region (if should-preview-above region-above region-below)))
+              (preview-auto--debug-log
+               (concat "Previewing "
+                       (if should-preview-above "above" "below")
+                       (when (and region-above region-below)
+                         "(closer)")))
+              (prog1 t
+                (preview-auto--region-wrapper (car region) (cdr region)))))))
        (t
         (setq preview-auto--keepalive nil))))))
 
