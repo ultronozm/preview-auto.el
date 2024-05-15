@@ -5,7 +5,7 @@
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
 ;; Version: 0.1
 ;; URL: https://github.com/ultronozm/preview-auto.el
-;; Package-Requires: ((emacs "26.1") (auctex "14.0.5"))
+;; Package-Requires: ((emacs "29.3") (auctex "14.0.5"))
 ;; Keywords: tex, convenience
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 ;; can be toggled via M-x preview-auto-mode, C-c C-p C-a, or the
 ;; Preview menu.
 ;;
-;; The following settings are recommended:
+;; I recommend using the following AUCTeX settings with this package:
 ;;
 ;; (setq preview-protect-point t)
 ;; (setq preview-locating-previews-message nil)
