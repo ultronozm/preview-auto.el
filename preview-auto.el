@@ -334,8 +334,9 @@ Imperfection: still causes current message to disappear."
   (let ((TeX-suppress-compilation-message t)
         (save-silently t))
     (advice-add 'write-region :around #'preview-auto--silent-write-region)
-    (preview-region beg end)
-    (advice-remove 'write-region #'preview-auto--silent-write-region)))
+    (prog1
+        (preview-region beg end)
+      (advice-remove 'write-region #'preview-auto--silent-write-region))))
 
 (defun preview-auto--update-editing-region ()
   "Update preview of environment being edited."
