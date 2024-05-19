@@ -28,12 +28,14 @@
 ;; can be toggled via M-x preview-auto-mode, C-c C-p C-a, or the
 ;; Preview menu.
 ;;
-;; I recommend using the following AUCTeX settings with this package:
+;; This package works best with the following AUCTeX settings:
 ;;
 ;; (setq preview-protect-point t)
 ;; (setq preview-locating-previews-message nil)
 ;; (setq preview-leave-open-previews-visible t)
 ;; (setq preview-LaTeX-command-replacements '(preview-LaTeX-disable-pdfoutput))
+;;
+;; See README.org for further details.
 
 ;;; Code:
 
@@ -311,7 +313,8 @@ otherwise from END."
   "If non-nil, print debug messages.")
 
 (defun preview-auto--debug-log (format-string &rest args)
-  "Print a debug message if `preview-auto--debug' is non-nil."
+  "Print a debug message if `preview-auto--debug' is non-nil.
+FORMAT-STRING is a format string, and ARGS are its arguments."
   (when preview-auto--debug
     (with-current-buffer (get-buffer-create "*preview-auto-debug*")
       (goto-char (point-min))
@@ -322,7 +325,9 @@ otherwise from END."
 
 (defun preview-auto--silent-write-region (orig-fun &rest args)
   "Like `write-region', but suppresses messages.
-Imperfection: still causes current message to disappear."
+Imperfection: still causes current message to disappear.
+
+ORIG-FUN is the original function, and ARGS are its arguments."
   (let ((noninteractive t)
         (inhibit-message t)
         message-log-max)
@@ -510,8 +515,6 @@ cancel the preview, so that the preview is not misplaced."
    "(or toggle) at point"))
 
 (add-hook 'LaTeX-mode-hook #'preview-auto-setup)
-
-;; (let ((time (current-time))) (dotimes (x 1000) (preview-auto--last-valid-region (- (point) 10000) (point))) (let ((time2 (current-time))) (message "time: %s msec" (* 1000 (float-time (time-subtract time2 time))))))
 
 (provide 'preview-auto)
 ;;; preview-auto.el ends here
