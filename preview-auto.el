@@ -456,23 +456,24 @@ BEG is the start of the modified region, END is the end of the region,
 and LENGTH is the length of the modification.  If the modification
 occurs before some region where a preview is being generated, then
 cancel the preview, so that the preview is not misplaced."
-  (preview-auto--debug-log "After change:")
-  (preview-auto--debug-log "  %d, %d, %d" beg end length)
-  (when preview-current-region
-    (preview-auto--debug-log "  (%d, %d)"
-                             (car preview-current-region)
-                             (cdr preview-current-region))
-    (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))))
-      (preview-auto--debug-log "  region: %s" proc))
-    (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-master-file)))))
-      (preview-auto--debug-log "  master: %s" proc)))
-  (if (and preview-current-region
-           (< beg (cdr preview-current-region)))
-      (progn
-        (preview-auto--debug-log "Cancelling preview")
-        (ignore-errors (TeX-kill-job))
-        (setq preview-abort-flag t))
-    (preview-auto--debug-log "Not cancelling preview")))
+  (save-match-data
+    (preview-auto--debug-log "After change:")
+    (preview-auto--debug-log "  %d, %d, %d" beg end length)
+    (when preview-current-region
+      (preview-auto--debug-log "  (%d, %d)"
+                               (car preview-current-region)
+                               (cdr preview-current-region))
+      (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))))
+        (preview-auto--debug-log "  region: %s" proc))
+      (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-master-file)))))
+        (preview-auto--debug-log "  master: %s" proc)))
+    (if (and preview-current-region
+             (< beg (cdr preview-current-region)))
+        (progn
+          (preview-auto--debug-log "Cancelling preview")
+          (ignore-errors (TeX-kill-job))
+          (setq preview-abort-flag t))
+      (preview-auto--debug-log "Not cancelling preview"))))
 
 (defun preview-auto--post-command ()
   "Function called after each command in `preview-auto-mode'."
