@@ -284,26 +284,24 @@ otherwise from END."
                 (if search-from-beginning
                     (seq-some
                      (lambda (i)
-                       (when
-                           (seq-some
-                            (lambda (re)
-                              (save-excursion
-                                (goto-char (cdar (nth i envs)))
-                                (preview-auto--search
-                                 re (caar (nth (1+ i) envs)))))
-                            preview-auto-barriers)
+                       (when (seq-some
+                              (lambda (re)
+                                (save-excursion
+                                  (goto-char (cdar (nth i envs)))
+                                  (preview-auto--search
+                                   re (caar (nth (1+ i) envs)))))
+                              preview-auto-barriers)
                          (cons (car closest) i)))
                      (number-sequence (car closest) (1- (cdr closest))))
                   (seq-some
                    (lambda (j)
-                     (when
-                         (seq-some
-                          (lambda (re)
-                            (save-excursion
-                              (goto-char (cdar (nth (1- j) envs)))
-                              (preview-auto--search
-                               re (caar (nth j envs)))))
-                          preview-auto-barriers)
+                     (when (seq-some
+                            (lambda (re)
+                              (save-excursion
+                                (goto-char (cdar (nth (1- j) envs)))
+                                (preview-auto--search
+                                 re (caar (nth j envs)))))
+                            preview-auto-barriers)
                        (cons j (cdr closest))))
                    (number-sequence (cdr closest) (1+ (car closest)) -1)))))
             (setq closest shortening))
@@ -420,7 +418,8 @@ group."
   (unless (or (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))
               (get-buffer-process (TeX-process-buffer-name (TeX-master-file))))
     (setq preview-auto--rules (preview-auto--generate-rules))
-    (setq preview-auto--begin-re (regexp-opt (mapcar #'car preview-auto--rules) t))
+    (setq preview-auto--begin-re
+          (regexp-opt (mapcar #'car preview-auto--rules) t))
     (pcase-let ((`(,pmin . ,pmax) (preview-auto--base-range)))
       (setq preview-auto--keepalive t)
       (cond
@@ -433,10 +432,11 @@ group."
               (region-below (preview-auto--first-valid-region
                              (max pmin (point)) pmax)))
           (when (or region-above region-below)
-            (let* ((should-preview-above (or (not region-below)
-                                             (and region-above region-below
-                                                  (<= (- (point) (cdr region-above))
-                                                      (- (car region-below) (point))))))
+            (let* ((should-preview-above
+                    (or (not region-below)
+                        (and region-above region-below
+                             (<= (- (point) (cdr region-above))
+                                 (- (car region-below) (point))))))
                    (region (if should-preview-above region-above region-below)))
               (preview-auto--debug-log
                (concat "Previewing "
@@ -477,9 +477,11 @@ cancel the preview, so that the preview is not misplaced."
       (preview-auto--debug-log "  (%d, %d)"
                                (car preview-current-region)
                                (cdr preview-current-region))
-      (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))))
+      (when-let ((proc (get-buffer-process
+                        (TeX-process-buffer-name (TeX-region-file)))))
         (preview-auto--debug-log "  region: %s" proc))
-      (when-let ((proc (get-buffer-process (TeX-process-buffer-name (TeX-master-file)))))
+      (when-let ((proc (get-buffer-process
+                        (TeX-process-buffer-name (TeX-master-file)))))
         (preview-auto--debug-log "  master: %s" proc)))
     (if (and preview-current-region
              (< beg (cdr preview-current-region)))
