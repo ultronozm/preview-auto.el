@@ -69,16 +69,25 @@ For this to have any effect, it must be set before
   "Extra environments to consider for automatic previewing."
   :type '(repeat string))
 
+(defcustom preview-auto-detect-math-via-font-lock '(tex-mode TeX-mode)
+  "List of modes in which to use font-lock to detect math environments.
+This is faster than using `texmathp', but may not work outside tex major
+modes without additional setup.  Set to `nil' to always use `texmathp'."
+  :type '(repeat symbol))
+
 (defun preview-auto--math-p ()
   "Return non-nil if point is in a math environment.
 Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
 `font-latex-math-face'."
-  (let ((math-face 'font-latex-math-face)
-        (face (plist-get (text-properties-at (point))
-                         'face)))
-    (or (eq face math-face)
-        (and (listp face)
-             (memq math-face face)))))
+  (if (seq-some #'derived-mode-p preview-auto-detect-math-via-font-lock)
+      (let ((math-face 'font-latex-math-face)
+            (face (plist-get (text-properties-at (point))
+                             'face)))
+        (or (eq face math-face)
+            (and (listp face)
+                 (memq math-face face))))
+    (texmathp)))
+
 
 (defun preview-auto--generate-rules ()
   "Return list of rules for identifying math environments."
