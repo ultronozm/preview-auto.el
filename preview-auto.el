@@ -106,25 +106,33 @@ is valid.")
 (defvar-local preview-auto--begin-re nil
   "Regular expression for identifying the beginning of a math environment.")
 
-(defun preview-auto--comment-p ()
-  "Return non-nil if point is in a comment or verbatim environment.
-Implemented using font-lock faces."
-  (let ((comment-faces '(font-lock-comment-face
-                         font-latex-verbatim-face))
-        (face (plist-get (text-properties-at (point))
-                         'face)))
-    (or
-     (memq face comment-faces)
-     (and
-      (listp face)
-      (cl-some (lambda (f) (memq f comment-faces)) face)))))
+;; (defun preview-auto--comment-p ()
+;;   "Return non-nil if point is in a comment or verbatim environment.
+;; Implemented using font-lock faces."
+;;   (or
+;;    ;; (let ((comment-faces '(font-lock-comment-face
+;;    ;;                        font-latex-verbatim-face))
+;;    ;;       (face (plist-get (text-properties-at (point))
+;;    ;;                        'face)))
+;;    ;;   (or
+;;    ;;    (memq face comment-faces)
+;;    ;;    (and
+;;    ;;     (listp face)
+;;    ;;     (seq-some (lambda (f) (memq f comment-faces)) face))))
+;;    (TeX-in-comment)))
+
+;; (defun preview-auto--search (regexp bound)
+;;   "Search for REGEXP before BOUND.
+;; Ignore comments and verbatim environments."
+;;   (tex-search-noncomment
+;;    (re-search-forward regexp bound t)))
 
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
 Ignore comments and verbatim environments."
   (catch 'found
     (while (re-search-forward regexp bound t)
-      (when (not (preview-auto--comment-p))
+      (when (not (TeX-in-comment))
         (throw 'found (point))))))
 
 (defcustom preview-auto-refresh-after-compilation t
