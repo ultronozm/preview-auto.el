@@ -12,7 +12,7 @@ The purpose of preview-latex is to embed LaTeX environments such as display math
 
 AUCTeX provides commands for generating previews in various regions: the current section, the entire document, the marked region, and so on.  While these previews generate, you're not supposed to edit while the previews generate, because that can mess up their positioning.  A typical workflow is thus to run the command =preview-section= (=C-c C-p C-s=) every few minutes, during pauses in editing.  This introduces a bit of overhead if you prefer to have previews on by default.
 
-This package provides a minor mode =preview-auto-mode= in which the visible portion of an AUCTeX buffer is continuously previewed.  It can be toggled via the command =M-x preview-auto-mode=, the keybinding =C-c C-p C-a=, or the =Preview= menu.
+This package provides a minor mode, =preview-auto-mode=, toggled via the command =M-x preview-auto-mode=, the keybinding =C-c C-p C-a=, or the =Preview= menu.  With this minor mode activated, the visible portion of an AUCTeX buffer is continuously previewed.  Moreover, previews will automatically abort if you edit in a way that could affect their positioning.  Finally, it works in more general situations (e.g., you can use it out-of-the-box to highlight LaTeX in source code comments for other programming languages).
 
 * Configuration
 This package requires [[https://www.gnu.org/software/auctex/manual/auctex/Installation.html#Installation][AUCTeX]], so install that first, and check that the [[https://www.gnu.org/software/auctex/manual/preview-latex/index.html#Top][preview-latex]] feature of AUCTeX works.
