@@ -193,11 +193,11 @@ See the documentation of `preview-auto--next-env' for details."
 
 (defun preview-auto--next-env (bound)
   "Find next LaTeX math environment before BOUND.
-Return list of iterated cons cells ((BEGIN . END) . VALIDITY) describing
-the bounds for the environment and whether it is considered valid for
-preview, which means that (1) it consists of more than just
-whitespace, (2) it has not already been previewed, and (3) the
-customizable predicate `preview-auto-predicate' holds."
+Return iterated cons cell ((BEGIN . END) . VALIDITY) describing bounds
+for the environment and whether it is considered valid for preview,
+which means that (1) it consists of more than just whitespace, (2) it
+has not already been previewed, and (3) the customizable predicate
+`preview-auto-predicate' holds."
   (catch 'found
     (while (preview-auto--search preview-auto--begin-re bound)
       (let* ((begin (match-beginning 0))
