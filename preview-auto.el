@@ -99,7 +99,7 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
 (defvar-local preview-auto--rules nil
   "Rules for identifying math environments.
 Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
-BEGIN and END are the delimiters and PREDICATE is a function, called
+BEGIN and END are the delimiters and PREDICATE is a lisp form, evaluated
 just beyond the BEGIN delimiter, that returns non-nil if the environment
 is valid.")
 
