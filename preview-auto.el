@@ -86,7 +86,7 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
           (mapcar (lambda (pair)
                     (cons (car pair)
                           (cons (cdr pair)
-                                (if (equal (car pair) "$")
+                                (if (member (car pair) '("$" "$$"))
                                     '(preview-auto--math-p)
                                   t))))
                   '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
