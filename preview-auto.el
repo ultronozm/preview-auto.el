@@ -491,6 +491,8 @@ cancel the preview, so that the preview is not misplaced."
         (setq TeX-header-end LaTeX-header-end))
       (unless TeX-trailer-start
         (setq TeX-trailer-start LaTeX-trailer-start))
+      (unless (memq #'preview-move-point post-command-hook)
+        (add-hook 'post-command-hook #'preview-move-point nil t))
       (add-hook 'after-change-functions #'preview-auto--after-change nil t)
       (add-hook 'post-command-hook #'preview-auto--post-command nil t)
       (when preview-auto--timer
