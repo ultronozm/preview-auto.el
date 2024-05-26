@@ -102,33 +102,12 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
 (defvar-local preview-auto--rules nil
   "Rules for identifying math environments.
 Each rule is an iterated cons cell ((BEGIN . END) . PREDICATE), where
-BEGIN and END are the delimiters and PREDICATE is a lisp form, evaluated
+BEGIN and END are the delimiters and PREDICATE is a Lisp form, evaluated
 just beyond the BEGIN delimiter, that returns non-nil if the environment
 is valid.")
 
 (defvar-local preview-auto--begin-re nil
   "Regular expression for identifying the beginning of a math environment.")
-
-;; (defun preview-auto--comment-p ()
-;;   "Return non-nil if point is in a comment or verbatim environment.
-;; Implemented using font-lock faces."
-;;   (or
-;;    ;; (let ((comment-faces '(font-lock-comment-face
-;;    ;;                        font-latex-verbatim-face))
-;;    ;;       (face (plist-get (text-properties-at (point))
-;;    ;;                        'face)))
-;;    ;;   (or
-;;    ;;    (memq face comment-faces)
-;;    ;;    (and
-;;    ;;     (listp face)
-;;    ;;     (seq-some (lambda (f) (memq f comment-faces)) face))))
-;;    (TeX-in-comment)))
-
-;; (defun preview-auto--search (regexp bound)
-;;   "Search for REGEXP before BOUND.
-;; Ignore comments and verbatim environments."
-;;   (tex-search-noncomment
-;;    (re-search-forward regexp bound t)))
 
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
