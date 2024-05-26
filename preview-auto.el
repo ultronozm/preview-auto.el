@@ -85,7 +85,10 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
   (let* ((basic-rules
           (mapcar (lambda (pair)
                     (cons (car pair)
-                          (cons (cdr pair) '(preview-auto--math-p))))
+                          (cons (cdr pair)
+                                (if (equal (car pair) "$")
+                                    '(preview-auto--math-p)
+                                  t))))
                   '(("$" . "$") ("$$" . "$$") ("\\(" . "\\)") ("\\[" . "\\]"))))
          (env-rules
           (mapcar (lambda (env)
