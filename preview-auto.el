@@ -39,7 +39,6 @@
 
 ;;; Code:
 
-(require 'cl-lib)
 (require 'latex)
 (require 'preview)
 
@@ -142,7 +141,7 @@ intermediate state.")
 
 (defun preview-auto--tex-fold-at (&optional pos)
   "Return non-nil when there is a tex-fold at POS."
-  (cl-some
+  (seq-some
    (lambda (ov)
      (eq (overlay-get ov 'category) 'TeX-fold))
    (overlays-at (or pos (point)))))
@@ -152,8 +151,10 @@ intermediate state.")
 A preview is considered non-disabled if it is active or inactive
 according to `preview.el'.  If `preview-auto-refresh-after-compilation'
 is non-nil, then we further require that the preview has been generated
-more recently than the aux file."
-  (cl-some
+more recently than the aux file.  This last requirement, when combined
+with the `tex-numbers' and `tex-continuous' packages, ensures that
+preview equation numbers are updated automatically."
+  (seq-some
    (lambda (ov)
      (and
       (memq (overlay-get ov 'preview-state) '(active inactive))
@@ -273,10 +274,10 @@ otherwise from END."
           (when-let
               ((shortening
                 (if search-from-beginning
-                    (cl-some
+                    (seq-some
                      (lambda (i)
                        (when
-                           (cl-some
+                           (seq-some
                             (lambda (re)
                               (save-excursion
                                 (goto-char (cdar (nth i envs)))
@@ -285,10 +286,10 @@ otherwise from END."
                             preview-auto-barriers)
                          (cons (car closest) i)))
                      (number-sequence (car closest) (1- (cdr closest))))
-                  (cl-some
+                  (seq-some
                    (lambda (j)
                      (when
-                         (cl-some
+                         (seq-some
                           (lambda (re)
                             (save-excursion
                               (goto-char (cdar (nth (1- j) envs)))
