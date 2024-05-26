@@ -403,16 +403,20 @@ This is a window around point controlled by the user options
 `preview-auto-chars-below' and `preview-auto-chars-above', as well as
 the beginning and end of the document."
   (let* ((begin-document
-          (or (save-excursion
-                (goto-char (point-min))
-                (when (re-search-forward TeX-header-end nil t)
-                  (match-end 0)))
+          (or (and (or (derived-mode-p 'tex-mode)
+                       (derived-mode-p 'TeX-mode))
+                   (save-excursion
+                     (goto-char (point-min))
+                     (when (re-search-forward TeX-header-end nil t)
+                       (match-end 0))))
               (point-min)))
          (end-document
-          (or (save-excursion
-                (goto-char (point-min))
-                (when (re-search-forward TeX-trailer-start nil t)
-                  (match-beginning 0)))
+          (or (and (or (derived-mode-p 'tex-mode)
+                       (derived-mode-p 'TeX-mode))
+                   (save-excursion
+                     (goto-char (point-min))
+                     (when (re-search-forward TeX-trailer-start nil t)
+                       (match-beginning 0))))
               (point-max)))
          (pmin (max begin-document
                     (- (point) preview-auto-chars-above)))
