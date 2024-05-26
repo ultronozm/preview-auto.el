@@ -438,8 +438,7 @@ group."
 
 (defun preview-auto--timer-function ()
   "Function called by the preview timer to update LaTeX previews."
-  (and (eq major-mode 'LaTeX-mode)
-       preview-auto-mode
+  (and preview-auto-mode
        preview-auto--timer
        preview-auto--keepalive
        (preview-auto--preview-something)))
