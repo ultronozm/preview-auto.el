@@ -231,7 +231,8 @@ Example: (nil t t t nil nil t nil) => ((1 . 3) (6 . 6))"
     (nreverse intervals)))
 
 (defcustom preview-auto-barriers
-  '("\\\\begin{abstract}"
+  '("%"
+    "\\\\begin{abstract}"
     "\\\\includegraphics"
     "\\\\part"
     "\\\\chapter"
