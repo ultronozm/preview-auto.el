@@ -341,7 +341,13 @@ ORIG-FUN is the original function, and ARGS are its arguments."
         (save-silently t))
     (advice-add 'write-region :around #'preview-auto--silent-write-region)
     (prog1
-        (preview-region beg end)
+        ;; If we are working in a file buffer that is not a tex file,
+        ;; then we want preview-region to operate in "non-file" mode,
+        ;; where it passes "<none>" to TeX-region-create.
+        (if (eq TeX-master t)
+            (preview-region beg end)
+          (let ((buffer-file-name nil))
+            (preview-region beg end)))
       (advice-remove 'write-region #'preview-auto--silent-write-region))))
 
 (defun preview-auto--update-editing-region ()
