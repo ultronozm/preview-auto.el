@@ -109,12 +109,31 @@ is valid.")
 (defvar-local preview-auto--begin-re nil
   "Regular expression for identifying the beginning of a math environment.")
 
+
+(defun preview-auto--check-default ()
+  "Default predicate for checking whether to consider a delimiter.
+Returns non-nil if either
+
+- we're in a tex mode and it is NOT in a comment,
+
+- we're in a programming mode it IS in a comment, or
+
+- we are in some other mode (e.g., a non-tex text mode)."
+  (if (or (derived-mode-p 'tex-mode) (derived-mode-p 'TeX-mode))
+      (not (TeX-in-comment))
+    (if (derived-mode-p 'prog-mode)
+        (nth 4 (syntax-ppss))
+      t)))
+
+(defcustom preview-auto-check-function #'preview-auto--check-default
+  "Predicate for checking whether to consider a delimiter.")
+
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
 Ignore comments and verbatim environments."
   (catch 'found
     (while (re-search-forward regexp bound t)
-      (when (not (TeX-in-comment))
+      (when (funcall preview-auto-check-function)
         (throw 'found (point))))))
 
 (defcustom preview-auto-refresh-after-compilation t
