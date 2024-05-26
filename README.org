@@ -68,10 +68,23 @@ I use something like the following =use-package= declaration:
 
 My precise current setup may be found in [[https://github.com/ultronozm/emacsd/blob/main/init-latex.el][the LaTeX part of my config]] (=elpaca= branch).
 
-* Non-file buffers
-This package works fine in non-file buffers running =LaTeX-mode=, provided that you set the local variable =TeX-master= to the name of a valid tex file containing all the macros that you use.
+** Non-file buffers and other modes
+This package works fine in non-file buffers running =LaTeX-mode=, provided that you set the local variable =TeX-master= to the name of a valid tex file containing all the macros that you use.  For example, if "~/doit/preview-master.tex" is the name of such a file, and you want to use =preview-auto-mode= in [[https://orgmode.org/manual/Editing-Source-Code.html][indirect org-mode source blocks]], just add something like the following to your config:
 
-* tikzpicture support
+#+begin_src elisp
+(defun my/set-TeX-master ()
+  (setq TeX-master "~/doit/preview-master.tex"))
+
+(advice-add 'org-edit-src-code :after 'my/set-TeX-master)
+#+end_src
+
+It also works in buffers running other major modes.  (For example, I use it to preview LaTeX in comments in Lean4 files.)  Again, you just need to specify a suitable TeX-master.  For Lean4, I use something like:
+#+begin_src elisp
+(add-hook 'lean4-mode-hook 'my/set-TeX-master)
+#+end_src
+The default behavior is that in programming modes, only the comments are searched for latex code.  You can customize this via the defcustom =preview-auto-check-function=.
+
+** tikzpicture support
 According to section B.4.5 of the =preview-latex= info manual, support for the tikzpicture environment can be enabled by adding the following lines to your document preamble:
 #+begin_src latex
 \usepackage[displaymath,sections,graphics,floats,textmath]{preview}
