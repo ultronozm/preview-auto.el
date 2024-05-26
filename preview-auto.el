@@ -72,7 +72,8 @@ For this to have any effect, it must be set before
 (defcustom preview-auto-detect-math-via-font-lock '(tex-mode TeX-mode)
   "List of modes in which to use font-lock to detect math environments.
 This is faster than using `texmathp', but may not work outside tex major
-modes without additional setup.  Set to `nil' to always use `texmathp'."
+modes without additional setup.  Set to `nil' to always use
+`texmathp' (e.g., if you work in LaTeX-mode with font-lock disabled)."
   :type '(repeat symbol))
 
 (defun preview-auto--math-p ()
@@ -135,11 +136,13 @@ Returns non-nil if either
       t)))
 
 (defcustom preview-auto-check-function #'preview-auto--check-default
-  "Predicate for checking whether to consider a delimiter.")
+  "Predicate for checking whether to consider a delimiter."
+  :type 'function)
 
 (defun preview-auto--search (regexp bound)
   "Search for REGEXP before BOUND.
-Ignore comments and verbatim environments."
+Ignore anything for which the call to `preview-auto-check-function'
+returns nil."
   (catch 'found
     (while (re-search-forward regexp bound t)
       (when (funcall preview-auto-check-function)
@@ -153,7 +156,7 @@ the correct form."
   :type 'boolean)
 
 (defconst preview-auto--refresh-delay '(0 1)
-  "Delay in seconds before refreshing previews after compilation.
+  "Delay, as a time value, before refreshing previews after compilation.
 This is used to avoid refreshing previews while the aux file is in some
 intermediate state.")
 
