@@ -69,11 +69,12 @@ For this to have any effect, it must be set before
   "Extra environments to consider for automatic previewing."
   :type '(repeat string))
 
-(defcustom preview-auto-detect-math-via-font-lock '(tex-mode TeX-mode)
+(defcustom preview-auto-detect-math-via-font-lock 'tex-mode
   "List of modes in which to use font-lock to detect math environments.
-This is faster than using `texmathp', but may not work outside tex major
-modes without additional setup.  Set to `nil' to always use
-`texmathp' (e.g., if you work in LaTeX-mode with font-lock disabled)."
+Applies also to any derived modes.  This is faster than using
+`texmathp', but may not work outside tex major modes without additional
+setup.  Set to `nil' to always use `texmathp' (e.g., if you work in
+LaTeX-mode with font-lock disabled)."
   :type '(repeat symbol))
 
 (defun preview-auto--math-p ()
@@ -129,7 +130,7 @@ Returns non-nil if either
 - we're in a programming mode it IS in a comment, or
 
 - we are in some other mode (e.g., a non-tex text mode)."
-  (if (or (derived-mode-p 'tex-mode) (derived-mode-p 'TeX-mode))
+  (if (derived-mode-p 'tex-mode)
       (not (TeX-in-comment))
     (if (derived-mode-p 'prog-mode)
         (nth 4 (syntax-ppss))
@@ -406,16 +407,14 @@ This is a window around point controlled by the user options
 `preview-auto-chars-below' and `preview-auto-chars-above', as well as
 the beginning and end of the document."
   (let* ((begin-document
-          (or (and (or (derived-mode-p 'tex-mode)
-                       (derived-mode-p 'TeX-mode))
+          (or (and (derived-mode-p 'tex-mode)
                    (save-excursion
                      (goto-char (point-min))
                      (when (re-search-forward TeX-header-end nil t)
                        (match-end 0))))
               (point-min)))
          (end-document
-          (or (and (or (derived-mode-p 'tex-mode)
-                       (derived-mode-p 'TeX-mode))
+          (or (and (derived-mode-p 'tex-mode)
                    (save-excursion
                      (goto-char (point-min))
                      (when (re-search-forward TeX-trailer-start nil t)
