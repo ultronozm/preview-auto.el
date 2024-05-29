@@ -69,7 +69,7 @@ For this to have any effect, it must be set before
   "Extra environments to consider for automatic previewing."
   :type '(repeat string))
 
-(defcustom preview-auto-detect-math-via-font-lock 'tex-mode
+(defcustom preview-auto-detect-math-via-font-lock '(tex-mode)
   "List of modes in which to use font-lock to detect math environments.
 Applies also to any derived modes.  This is faster than using
 `texmathp', but may not work outside tex major modes without additional
