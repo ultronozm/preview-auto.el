@@ -73,8 +73,8 @@ For this to have any effect, it must be set before
   "List of modes in which to use font-lock to detect math environments.
 Applies also to any derived modes.  This is faster than using
 `texmathp', but may not work outside tex major modes without additional
-setup.  Set to `nil' to always use `texmathp' (e.g., if you work in
-LaTeX-mode with font-lock disabled)."
+setup.  Set to nil to always use `texmathp' (e.g., if you work in
+`LaTeX-mode' with font-lock disabled)."
   :type '(repeat symbol))
 
 (defun preview-auto--math-p ()
