@@ -151,9 +151,9 @@ returns nil."
 
 (defcustom preview-auto-refresh-after-compilation t
   "If non-nil, refresh previews after each compilation.
-This plays well with the packages `tex-numbers' and `tex-continuous':
-the result is that preview equation numbers are updated automatically to
-the correct form."
+This plays well with the packages `auctex-label-numbers' and
+`auctex-cont-latexmk': the result is that preview equation numbers are
+updated automatically to the correct form."
   :type 'boolean)
 
 (defconst preview-auto--refresh-delay '(0 1)
@@ -174,8 +174,8 @@ A preview is considered non-disabled if it is active or inactive
 according to `preview.el'.  If `preview-auto-refresh-after-compilation'
 is non-nil, then we further require that the preview has been generated
 more recently than the aux file.  This last requirement, when combined
-with the `tex-numbers' and `tex-continuous' packages, ensures that
-preview equation numbers are updated automatically."
+with the `auctex-label-numbers' and `auctex-cont-latexmk' packages,
+ensures that preview equation numbers are updated automatically."
   (seq-some
    (lambda (ov)
      (and
