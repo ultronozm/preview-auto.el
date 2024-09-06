@@ -388,8 +388,10 @@ ORIG-FUN is the original function, and ARGS are its arguments."
                  (end (save-excursion
                         (preview-auto--search (regexp-quote end-string)
                                               limit))))
-              ;; Don't preview empty regions.
-              (when (string-match-p "[^[:space:]\n\r]"
+              ;; Don't preview essentially empty regions.  Exclude
+              ;; backslashes to avoid issues with previewing
+              ;; regions-in-progress such as "$\$".
+              (when (string-match-p "[^[:space:]\n\r\\]"
                                     (buffer-substring-no-properties
                                      (+ begin (length why))
                                      (- end (length end-string))))
