@@ -62,8 +62,13 @@ I use something like the following =use-package= declaration:
   (setq preview-leave-open-previews-visible t)
   :custom
   (preview-auto-interval 0.1)
-  (preview-LaTeX-command-replacements
-   '(preview-LaTeX-disable-pdfoutput)))  
+
+  ;; Uncomment the following only if you have followed the above
+  ;; instructions concerning, e.g., hyperref:
+
+  ;; (preview-LaTeX-command-replacements
+  ;;  '(preview-LaTeX-disable-pdfoutput))
+  )
 #+end_src
 
 My precise current setup may be found in [[https://github.com/ultronozm/emacsd/blob/main/init-latex.el][the LaTeX part of my config]] (=elpaca= branch).
@@ -98,7 +103,7 @@ in your config.  I keep this disabled by default because of the extra setup requ
 
 * Issues
 - Sometimes the preview command run by the timer produces the same error over and over again, effectively locking Emacs.  If this happens, you should hold down =C-g= until the timer dies.  Then, try using =preview= "normally" and sort out the erorrs.  Finally, toggle =preview-auto-mode=.
-  
+
 - When the timer provided by =preview-auto= fires, it clears the minibuffer.  This is because =inhibit-message= is used surrounding a call to =write-region= to prevent flooding the minibuffer with "Wrote..." messages, but messages sent under =inhibit-message= still clear the minibuffer.  This can be a bit annoying if you are looking at the minibuffer for some other reason (e.g., Flymake) while the =preview-auto= timer is firing a bunch.  Fixing this would require tweaking AUCTeX's internals a bit.
 
 - Very rarely, I've seen some =preview-latex= process (e.g., Ghostscript) gets stuck.  The symptom is that =preview-auto= will not generate anything, even after resetting the mode.  You can check if this has happened using =M-: (get-buffer-process (TeX-process-buffer-name (TeX-region-file)))=.  The fix is then to navigate to the =_region_.tex= buffer and do =M-x TeX-kill-job=.
