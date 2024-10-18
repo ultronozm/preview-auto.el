@@ -39,6 +39,7 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'cl-lib))
 (require 'latex)
 (require 'preview)
 
@@ -90,7 +91,6 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
                  (memq math-face face))))
     (texmathp)))
 
-
 (defun preview-auto--generate-rules ()
   "Return list of rules for identifying math environments."
   (let* ((basic-rules
@@ -119,7 +119,6 @@ is valid.")
 
 (defvar-local preview-auto--begin-re nil
   "Regular expression for identifying the beginning of a math environment.")
-
 
 (defun preview-auto--check-default ()
   "Default predicate for checking whether to consider a delimiter.
@@ -543,16 +542,17 @@ cancel the preview, so that the preview is not misplaced."
     (remove-hook 'after-change-functions #'preview-auto--after-change t)
     (remove-hook 'post-command-hook #'preview-auto--post-command t))))
 
+;;;###autoload
 (defun preview-auto-setup ()
-  "Hook function for installing bind and menu item."
+  "Set up keybinding and menu item for `preview-auto-mode'.
+This should be run after AUCTeX has loaded to a sufficient extent,
+e.g., in `LaTeX-mode-hook'."
   (remove-hook 'LaTeX-mode-hook #'preview-auto-setup)
   (define-key LaTeX-mode-map (kbd "C-c C-p C-a") #'preview-auto-mode)
   (easy-menu-add-item
    nil '("Preview")
    ["automatically" preview-auto-mode]
    "(or toggle) at point"))
-
-(add-hook 'LaTeX-mode-hook #'preview-auto-setup)
 
 (provide 'preview-auto)
 ;;; preview-auto.el ends here
