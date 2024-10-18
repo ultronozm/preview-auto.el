@@ -57,6 +57,7 @@ I use something like the following =use-package= declaration:
 #+begin_src elisp
 (use-package preview-auto
   :after latex
+  :hook (LaTeX-mode . preview-auto-setup)
   :config
   (setq preview-protect-point t)
   (setq preview-locating-previews-message nil)
