@@ -521,23 +521,34 @@ cancel the preview, so that the preview is not misplaced."
   :lighter nil
   (cond
    (preview-auto-mode
-    (progn
-      (unless TeX-header-end
-        (setq TeX-header-end LaTeX-header-end))
-      (unless TeX-trailer-start
-        (setq TeX-trailer-start LaTeX-trailer-start))
-      (unless (memq #'preview-move-point post-command-hook)
-        (add-hook 'post-command-hook #'preview-move-point nil t))
-      (add-hook 'after-change-functions #'preview-auto--after-change nil t)
-      (add-hook 'post-command-hook #'preview-auto--post-command nil t)
-      (when preview-auto--timer
-        ;; Reset the timer, in case it's broken.
-        (cancel-timer preview-auto--timer)
-        (setq preview-auto--timer nil))
-      (setq preview-auto--timer (run-with-timer preview-auto-interval
-                                                preview-auto-interval
-                                                #'preview-auto--timer-function))
-      (setq preview-auto--keepalive t)))
+    (unless (or (derived-mode-p 'LaTeX-mode)
+                (and
+                 (stringp TeX-master)
+                 (file-exists-p TeX-master)))
+      (setq preview-auto-mode nil)
+      (user-error "Not in a LaTeX buffer, and TeX-master not set to a file"))
+    (unless TeX-header-end
+      (setq TeX-header-end LaTeX-header-end))
+    (unless TeX-trailer-start
+      (setq TeX-trailer-start LaTeX-trailer-start))
+    (unless comment-start-skip ; for texmathp
+      (setq comment-start-skip
+            (concat "\\(\\(^\\|[^\\\n]\\)\\("
+                    (regexp-quote TeX-esc)
+                    (regexp-quote TeX-esc)
+                    "\\)*\\)\\(%+[ \t]*\\)")))
+    (unless (memq #'preview-move-point post-command-hook)
+      (add-hook 'post-command-hook #'preview-move-point nil t))
+    (add-hook 'after-change-functions #'preview-auto--after-change nil t)
+    (add-hook 'post-command-hook #'preview-auto--post-command nil t)
+    (when preview-auto--timer
+      ;; Reset the timer, in case it's broken.
+      (cancel-timer preview-auto--timer)
+      (setq preview-auto--timer nil))
+    (setq preview-auto--timer (run-with-timer preview-auto-interval
+                                              preview-auto-interval
+                                              #'preview-auto--timer-function))
+    (setq preview-auto--keepalive t))
    (t
     (remove-hook 'after-change-functions #'preview-auto--after-change t)
     (remove-hook 'post-command-hook #'preview-auto--post-command t))))
