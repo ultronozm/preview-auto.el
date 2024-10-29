@@ -3,7 +3,7 @@
 ;; Copyright (C) 2024  Free Software Foundation, Inc.
 
 ;; Author: Paul D. Nelson <nelson.paul.david@gmail.com>
-;; Version: 0.3
+;; Version: 0.4
 ;; URL: https://github.com/ultronozm/preview-auto.el
 ;; Package-Requires: ((emacs "29.3") (auctex "14.0.5"))
 ;; Keywords: tex, convenience
