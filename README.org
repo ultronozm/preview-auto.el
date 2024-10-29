@@ -73,7 +73,7 @@ I use something like the following =use-package= declaration:
   )
 #+end_src
 
-My precise current setup may be found in [[https://github.com/ultronozm/emacsd/blob/main/init-latex.el][the LaTeX part of my config]] (=elpaca= branch).
+My precise current setup may be found in [[https://github.com/ultronozm/emacsd/blob/main/init.el][my config]].
 
 ** Non-file buffers and other modes
 This package works fine in non-file buffers running =LaTeX-mode=, provided that you set the local variable =TeX-master= to the name of a valid tex file containing all the macros that you use.  For example, if "~/doit/preview-master.tex" is the name of such a file, and you want to use =preview-auto-mode= in [[https://orgmode.org/manual/Editing-Source-Code.html][indirect org-mode source blocks]], just add something like the following to your config:
