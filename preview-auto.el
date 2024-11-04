@@ -272,7 +272,11 @@ Example: (nil t t t nil nil t nil) => ((1 . 3) (6 . 6))"
     "\\\\subsubsection"
     "\\\\paragraph"
     "\\\\subparagraph")
-  "List of barrier regexps, excluded from in regions sent for previewing."
+  "List of barrier regexps, excluded from in regions sent for previewing.
+The motivation for the default value is to avoid attempting to preview
+comment regions (where functions such as texmathp occasionally fail),
+and to avoid crossing section labels, which we prefer to display using
+tex-fold rather than preview."
   :type '(repeat string))
 
 (defun preview-auto--get-valid-region (beg end search-from-beginning)
