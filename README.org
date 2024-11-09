@@ -49,7 +49,7 @@ If you want =preview-auto-mode= to activate automatically when you visit a tex f
 #+begin_src elisp
 (use-package preview-auto
   :hook
-  (LaTeX-mode . czm-preview-mode-conditionally-enable))
+  (LaTeX-mode . preview-auto-conditionally-enable))
 #+end_src
 
 ** My setup
