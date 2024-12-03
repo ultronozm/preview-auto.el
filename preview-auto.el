@@ -66,7 +66,7 @@ For this to have any effect, it must be set before
 (defvar-local preview-auto--keepalive t
   "Used to keep track of when we should preview some more.")
 
-(defcustom preview-auto--extra-environments nil
+(defcustom preview-auto-extra-environments nil
   "Extra environments to consider for automatic previewing."
   :type '(repeat string))
 
@@ -106,7 +106,7 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
                     (cons (format "\\begin{%s}" env)
                           (cons (format "\\end{%s}" env) t)))
                   (append texmathp-environments
-                          preview-auto--extra-environments)))
+                          preview-auto-extra-environments)))
          (rules (append basic-rules env-rules)))
     rules))
 

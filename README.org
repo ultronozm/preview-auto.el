@@ -97,9 +97,9 @@ According to section B.4.5 of the =preview-latex= info manual, support for the t
 \usepackage[displaymath,sections,graphics,floats,textmath]{preview}
 \PreviewEnvironment[{[]}]{tikzpicture}
 #+end_src
-If you want =preview-auto-mode= to preview such environments automatically (including when they are not wrapped in some math environment), then you should add "tikzpicture" to the customizable list variable =preview-auto--extra-environments=, e.g., by putting
+If you want =preview-auto-mode= to preview such environments automatically (including when they are not wrapped in some math environment), then you should add "tikzpicture" to the customizable list variable =preview-auto-extra-environments=, e.g., by putting
 #+begin_src elisp
-(add-to-list 'preview-auto--extra-environments "tikzpicture")
+(add-to-list 'preview-auto-extra-environments "tikzpicture")
 #+end_src
 in your config.  I keep this disabled by default because of the extra setup required in the document preamble, without which =preview-latex= would return "LaTeX found no preview images" errors.
 
