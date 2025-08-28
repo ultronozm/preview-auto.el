@@ -105,8 +105,15 @@ Should work in AUCTeX `LaTeX-mode' buffers.  Implemented using
           (mapcar (lambda (env)
                     (cons (format "\\begin{%s}" env)
                           (cons (format "\\end{%s}" env) t)))
-                  (append texmathp-environments
-                          preview-auto-extra-environments)))
+                  (append
+                   ;; Use texmathp to get math environments.
+                   (progn (texmathp-compile)
+                          (mapcar #'car
+                                  (cl-remove-if-not
+                                   (lambda (entry)
+                                     (eq (nth 1 entry) 'env-on))
+                                   texmathp-tex-commands1)))
+                   preview-auto-extra-environments)))
          (rules (append basic-rules env-rules)))
     rules))
 
