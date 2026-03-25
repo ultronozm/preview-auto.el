@@ -33,6 +33,12 @@ We recommend the following AUCTeX settings.
 (setq preview-leave-open-previews-visible t)
 #+end_src
 
+In recent auctex versions the `preview-leave-open-previews-visible` option has been replaced by two new options:
+#+begin_src elisp
+(setopt preview-visibility-style 'always)
+(setopt preview-keep-stale-images t)
+#+end_src
+
 ** Optimization
 The following setting makes preview always use DVI's, which generate faster than PDF's:
 #+begin_src elisp
